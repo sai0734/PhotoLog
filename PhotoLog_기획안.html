@@ -333,7 +333,7 @@
 <div class="page">
 
   <header class="hero">
-    <div class="eyebrow">개인 프로젝트 기획안 · 최종안 v3</div>
+    <div class="eyebrow">개인 프로젝트 기획안 · 최종안 v4</div>
     <h1>PhotoLog</h1>
     <p class="tagline">출사지 공유 및 EXIF 기반 사진 커뮤니티 — AI 사진/장비 분석 기능 포함</p>
     <div class="meta-row">
@@ -341,6 +341,7 @@
       <span><b>시작</b> KDT 수료 직후</span>
       <span><b>개발 방식</b> 직접 구현 + AI 리뷰·조언</span>
       <span><b>구현 순서</b> 회원 → 게시판 → 갤러리 → 야간 출사지도 → AI 서비스</span>
+      <span><b>저장소</b> github.com/sai0734/PhotoLog</span>
     </div>
   </header>
 
@@ -378,6 +379,14 @@
     <div class="change-row">
       <div class="change-label">개발 순서</div>
       <div class="change-new">회원 → 게시판 → 갤러리 → 야간 출사지도 → AI 서비스 순으로 하나씩, 기능마다 큰 틀(뼈대)부터 완성</div>
+    </div>
+    <div class="change-row">
+      <div class="change-label">백엔드 구조</div>
+      <div class="change-new">기능 단위 패키지 구조(package-by-feature) 확정 — <code class="inline">member</code> / <code class="inline">global</code> / <code class="inline">security</code>, 이후 기능도 동일 컨벤션 적용</div>
+    </div>
+    <div class="change-row">
+      <div class="change-label">진행 현황</div>
+      <div class="change-new">① 회원 기능 구현 완료(로그인/로그아웃/마이페이지 동작 확인), GitHub 저장소 개설 및 초기 커밋 완료</div>
     </div>
   </div>
 
@@ -444,7 +453,10 @@
     </table>
 
     <h3>파일 저장 정책</h3>
-    <p>업로드 이미지(프로필 사진, 게시글 첨부, 갤러리 사진)는 클라우드 스토리지 없이 Spring 프로젝트의 <code class="inline">uploads</code> 폴더에 저장하고, DB에는 파일 경로만 저장합니다. <code class="inline">uploads</code> 폴더는 <code class="inline">.gitignore</code>로 제외하되, 폴더 자체는 <code class="inline">.gitkeep</code>으로 유지해 클론 직후에도 업로드가 실패하지 않게 합니다.</p>
+    <p>업로드 이미지(프로필 사진, 게시글 첨부, 갤러리 사진)는 클라우드 스토리지 없이 Spring 프로젝트의 <code class="inline">upload</code> 폴더에 저장하고, DB에는 파일 경로만 저장합니다. <code class="inline">upload</code> 폴더는 <code class="inline">.gitignore</code>로 제외합니다. 폴더 생성 로직(<code class="inline">@PostConstruct</code>)이 앱 구동 시 폴더가 없으면 자동으로 만들어주므로, 클론 직후에도 <code class="inline">.gitkeep</code> 없이 업로드가 정상 동작합니다.</p>
+
+    <h3>패키지 구조 원칙</h3>
+    <p>백엔드는 기능 단위로 패키지를 나누는 방식(package-by-feature)을 따릅니다. <code class="inline">com.backend.member</code>처럼 기능별 패키지 안에 controller·domain·dto·mapper·service를 함께 두고, 여러 기능이 공유하는 것(페이징 DTO, 파일 업로드 유틸, 스프링 설정)은 <code class="inline">com.backend.global</code>에, 인증/인가 인프라(필터·핸들러·JWT 유틸)는 <code class="inline">com.backend.security</code>에 모읍니다. 이후 게시판·갤러리 등 새 기능도 같은 컨벤션(<code class="inline">com.backend.board</code>, <code class="inline">com.backend.gallery</code>)을 따릅니다.</p>
 
     <h3>개발 순서 원칙</h3>
     <p class="lead">5개 핵심 기능을 동시에 벌리지 않고 순서대로 하나씩 구현합니다. 각 기능은 먼저 화면-API-DB가 끝까지 연결되는 최소 동작 버전(뼈대)을 완성해 파이프라인이 도는 걸 확인한 뒤, 예외 처리·유효성 검증·UX 디테일을 단계적으로 채워나갑니다.</p>
@@ -499,7 +511,7 @@
     <div class="phase">
       <div class="phase-head"><b>구현 순서</b><span>코어 5기능, 하나씩 순차 진행</span></div>
       <dl>
-        <div class="week"><dt>1단계 · 회원</dt><dd>로그인·회원가입·마이페이지, Security+JWT 스켈레톤 리딩</dd></div>
+        <div class="week"><dt>1단계 · 회원 <span class="tag mvp">완료</span></dt><dd>로그인·회원가입·마이페이지, Security+JWT 스켈레톤 리딩, GitHub 저장소 개설</dd></div>
         <div class="week"><dt>2단계 · 게시판</dt><dd>CRUD·페이징·댓글/대댓글(2단계)·다중 이미지 업로드</dd></div>
         <div class="week"><dt>3단계 · 사진 갤러리</dt><dd>무한스크롤·모달·exifr 파싱·등록/수정/삭제</dd></div>
         <div class="week"><dt>4단계 · 야간 출사지도</dt><dd>대표 지역 날씨·월령·광해도·종합 점수, 지도 클릭 조회</dd></div>
@@ -543,7 +555,7 @@
 
   <footer>
     <span>PhotoLog · 개인 프로젝트 기획안</span>
-    <span>v3 — 대화 기반 최종 조정본</span>
+    <span>v4 — 회원 기능 구현 완료 반영</span>
   </footer>
 
 </div>
