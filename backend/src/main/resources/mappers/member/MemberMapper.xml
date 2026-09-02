@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.backend.member.mapper.MemberMapper">
+
+    <resultMap id="memberResultMap" type="com.backend.member.domain.Member">
+        <id property="email" column="email"/>
+        <result property="pw" column="pw"/>
+        <result property="nickname" column="nickname"/>
+        <result property="social" column="social"/>
+        <collection property="memberRoleList"
+                    column="email"
+                    javaType="java.util.ArrayList"
+                    ofType="com.backend.member.domain.MemberRole"
+                    select="selectRoles"/>
+    </resultMap>
+
+    <select id="selectByEmail" resultMap="memberResultMap">
+        SELECT email, pw, nickname, social
+        FROM tbl_member
+        WHERE email = #{email}
+    </select>
+
+    <select id="selectRoles" resultType="com.backend.member.domain.MemberRole">
+        SELECT role_name
+        FROM tbl_member_role
+        WHERE member_email = #{email}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO tbl_member (email, pw, nickname, social)
+        VALUES (#{email}, #{pw}, #{nickname}, #{social})
+    </insert>
+
+    <insert id="insertRole">
+        INSERT INTO tbl_member_role (member_email, role_name)
+        VALUES (#{email}, #{role})
+    </insert>
+
+    <delete id="deleteRoles">
+        DELETE FROM tbl_member_role WHERE member_email = #{email}
+    </delete>
+
+    <update id="update">
+        UPDATE tbl_member
+        SET pw = #{pw},
+            nickname = #{nickname},
+            social = #{social}
+        WHERE email = #{email}
+    </update>
+
+</mapper>
