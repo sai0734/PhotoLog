@@ -16,12 +16,14 @@ KDT 풀스택 부트캠프 수료 직후 시작한 1인 포트폴리오 프로�
 | 영역 | 스택 |
 |---|---|
 | Frontend | React(Vite), TypeScript(신규 코드부터 적용 중 — 마이그레이션 진행 중), Redux Toolkit, Axios, Vanilla CSS/CSS Modules, `exifr`(EXIF 파싱), SunCalc(월령 계산) |
-| Backend | JDK 21, Spring Boot 3.x, Spring Security + JWT(jjwt), MyBatis, MariaDB |
+| Backend | JDK 21, Spring Boot 3.x, Spring Security + JWT(jjwt), Spring Data JPA(Hibernate), MariaDB |
 | AI | Python 3.10+, FastAPI, LangChain, ChromaDB(RAG), Ollama(로컬 LLM, 1순위) 또는 Groq(무료 API, 대안) |
 | 외부 API | Kakao Map API, OpenWeatherMap(무료 티어 5일 예보 한도), TossPayments(결제 데모, 스트레치) |
 | 툴 | Postman, Swagger UI |
 
 **AI 엔진 관련 의사결정**: 원래 Unsloth 파인튜닝 + vLLM 서빙을 고려했으나, GPU 확보·데이터셋 구축·학습 사이클 등 1인 개발 일정에 리스크가 커서 Ollama/Groq + RAG 조합으로 변경. "독립 AI 백엔드 구축, RAG 파이프라인 설계, 도메인 특화 프롬프트 엔지니어링" 스토리는 유지하면서 인프라 리스크만 제거.
+
+**Persistence 관련 의사결정 (2026-09-15)**: 회원 기능을 MyBatis(Mapper 인터페이스 + XML SQL)로 구현 완료한 뒤, 프로젝트 전체를 Spring Data JPA(Hibernate)로 전환하기로 결정. 참고용으로 보유하고 있던 KDT 부트캠프 JPA 버전 스켈레톤(`back_JPA.zip`)의 `domain`/`repository`/`service` 패턴을 그대로 따름. 스키마 관리도 수동 `schema.sql`(`spring.sql.init.mode=always`)에서 `spring.jpa.hibernate.ddl-auto=update`로 함께 전환, `schema.sql` 파일은 삭제. `Member`/`MemberRole` 기준으로 전환·빌드·프론트엔드 연동(로그인, 계정 생성)까지 검증 완료. **이후 게시판부터는 처음부터 JPA로 구현**하며, MyBatis 관련 설명은 이 문서에서 전부 JPA 기준으로 갱신함.
 
 ## 3. 시스템 아키텍처
 
@@ -61,8 +63,7 @@ EXIF는 서버 왕복 없이 **프론트엔드에서 `exifr`로 즉시 파싱**�
 
 ```
 com.backend
-├── BackendApplication.java
-│     @MapperScan(basePackages = "com.backend", annotationClass = Mapper.class)
+├── BackendApplication.java   (JPA는 @MapperScan 등 별도 스캔 설정 불필요)
 ├── global/                    ← 여러 기능이 공유하는 것
 │   ├── config/                   CustomSecurityConfig, CustomServletConfig, RootConfig
 │   ├── controller/advice/        CustomControllerAdvice
@@ -71,9 +72,9 @@ com.backend
 │   └── util/                     CustomFileUtil
 ├── member/                    ← 회원 기능 전용
 │   ├── controller/                MemberController
-│   ├── domain/                    Member, MemberRole
+│   ├── domain/                    Member(@Entity, @Table(name="tbl_member")), MemberRole
 │   ├── dto/                       MemberDTO, MemberModifyDTO
-│   ├── mapper/                    MemberMapper (@Mapper 어노테이션 있음)
+│   ├── repository/                MemberRepository (JpaRepository<Member, String> 상속)
 │   └── service/                   MemberService, MemberServiceImpl
 └── security/                  ← 인증/인가 인프라
     ├── controller/                APIRefreshController
@@ -83,22 +84,25 @@ com.backend
     └── securityutil/              CustomJWTException, JWTUtil
 ```
 
-새 매퍼 인터페이스를 추가할 때는 반드시 `@Mapper` 어노테이션을 붙일 것 (그래야 `@MapperScan`이 넓은 범위(`com.backend`)에서도 서비스 인터페이스 등과 혼동하지 않고 매퍼만 정확히 인식함 — 아래 8절 참고).
+새 Repository 인터페이스는 `JpaRepository<Entity, PK타입>`을 상속하기만 하면 Spring Data JPA가 런타임에 구현체를 자동 등록한다 (MyBatis처럼 별도 애노테이션·스캔 설정 불필요). 새 엔티티를 추가할 때 주의할 점:
+- PK가 자동증가면 `@GeneratedValue(strategy = GenerationType.IDENTITY)`를 붙일 것 (이메일처럼 자연키면 붙이지 않음 — `Member.email` 참고)
+- 테이블명을 명시하려면 `@Table(name="tbl_xxx")`를 반드시 붙일 것 — 안 붙이면 Hibernate가 클래스명 기준 기본 네이밍 전략으로 다른 이름의 테이블을 만들어버림
+- 지연 로딩(`fetch = FetchType.LAZY`)으로 연관된 컬렉션을 트랜잭션 밖에서 접근하면 `LazyInitializationException`이 날 수 있으므로, 필요하면 `@EntityGraph` + `@Query`로 즉시 로딩하는 조회 메서드를 따로 만든다 (`MemberRepository.getWithRoles(email)` 참고)
 
 ## 6. 핵심 기능 명세 (구현 순서: 회원 → 게시판 → 갤러리 → 야간출사지도 → AI서비스)
 
-### ① 회원 및 인증 (MVP) — ✅ 구현 완료, GitHub 푸시 완료
+### ① 회원 및 인증 (MVP) — ✅ 구현 완료, GitHub 푸시 완료 (JPA 전환 완료)
 - 페이지: 로그인 / 회원가입(아이디·비밀번호·닉네임 + 아이디 중복확인 + 프로필사진 1장 멀티파트) / 마이페이지(닉네임·프로필사진 수정, 회원탈퇴)
 - JWT 기반 인증(BCrypt 암호화, Access/Refresh Token) — 기존 스켈레톤 코드 리딩으로 이해
 - 회원탈퇴는 **소프트 삭제**: 탈퇴 후에도 게시글·사진은 유지, 작성자 표시만 "탈퇴한 회원" 등으로 대체
 - 스트레치: 이메일 인증, 소셜 로그인, 관리자 페이지 회원관리
-- 오늘 로그인/로그아웃/마이페이지 실제 동작 확인 완료
+- 로그인/로그아웃/마이페이지 실제 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (2절 Persistence 관련 의사결정 참고)
 
 ### ② 자유게시판 (MVP) — 다음 작업 대상, 미착수
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
 - 댓글·대댓글은 2단계로 제한 (대댓글에는 답글 불가)
-- 다중 이미지: `<input type="file" multiple>`로 동작 먼저 완성 → MyBatis `<selectKey>` + `<foreach>`로 `board_image` 테이블 일괄 INSERT
-- 게시글 삭제 시 연관 이미지 파일·댓글도 함께 정리 (DB `ON DELETE CASCADE` 또는 애플리케이션 레벨)
+- 다중 이미지: `<input type="file" multiple>`로 동작 먼저 완성 → JPA `@OneToMany`(`BoardImage` 엔티티) cascade로 `board_image` 테이블에 일괄 저장 (정확한 매핑 전략은 게시판 착수 시 결정)
+- 게시글 삭제 시 연관 이미지 파일·댓글도 함께 정리 (JPA cascade + `orphanRemoval` 또는 애플리케이션 레벨)
 - 스트레치: 카테고리 필터, 드래그앤드롭·클립보드 붙여넣기 업로드
 
 ### ③ 사진 갤러리 (MVP) — 미착수
@@ -132,9 +136,10 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 ## 8. 오늘 발견하고 고친 버그들 (재발 방지용 기록)
 
 1. **`application.properties` DB URL 오타**: `.../photologdbuser`로 잘못 써서 실제 DB명(`photologdb`)이 아니었음. 수정 완료.
-2. **`@MapperScan("com.backend.mapper")` — 옛 패키지 경로**: 폴더 구조를 `global/member/security`로 재편하면서 `MemberMapper`가 `com.backend.member.mapper`로 이동했는데 스캔 경로를 안 맞춰서 매퍼 빈이 등록 안 됨(`NoSuchBeanDefinitionException`). `@MapperScan(basePackages = "com.backend", annotationClass = Mapper.class)`로 수정하고, `MemberMapper`에 `@Mapper` 어노테이션 추가. **주의**: `annotationClass` 없이 그냥 `@MapperScan("com.backend")`만 하면, `com.backend` 밑의 모든 인터페이스(예: `MemberService`)를 매퍼로 오인식해서 가짜 빈이 생기고 실제 서비스 빈과 충돌할 수 있음 — 그래서 `annotationClass = Mapper.class`로 필터링함. 새 매퍼 만들 때마다 `@Mapper` 잊지 말 것.
+2. **`@MapperScan("com.backend.mapper")` — 옛 패키지 경로** *(MyBatis 시절 기록, 2026-09-15 JPA 전환으로 이 문제 자체가 해소됨 — `@MapperScan`/`@Mapper` 완전 제거)*: 폴더 구조를 `global/member/security`로 재편하면서 `MemberMapper`가 `com.backend.member.mapper`로 이동했는데 스캔 경로를 안 맞춰서 매퍼 빈이 등록 안 됨(`NoSuchBeanDefinitionException`). `@MapperScan(basePackages = "com.backend", annotationClass = Mapper.class)`로 수정하고, `MemberMapper`에 `@Mapper` 어노테이션 추가. **주의**: `annotationClass` 없이 그냥 `@MapperScan("com.backend")`만 하면, `com.backend` 밑의 모든 인터페이스(예: `MemberService`)를 매퍼로 오인식해서 가짜 빈이 생기고 실제 서비스 빈과 충돌할 수 있음 — 그래서 `annotationClass = Mapper.class`로 필터링함.
 3. **MariaDB 계정 미생성**: `CREATE USER`/`CREATE DATABASE` SQL을 작성만 하고 실행을 안 해서, 앱 구동 시 존재하지 않는 계정으로 접속을 시도 → `GSS-API authentication exception` / `Unable to obtain Principal Name for authentication` 에러 발생. SQL을 실제로 실행해서 해결.
 4. **한글 경로로 인한 Gradle 빌드/테스트 오류**: 프로젝트가 `OneDrive\바탕 화면\PhotoLog`(한글 경로 + OneDrive 동기화 폴더)에 있어서, `./gradlew clean test`를 해도 `ClassNotFoundException`이 반복 발생(컴파일은 성공하는데 테스트 워커 JVM이 클래스를 못 찾음). 콘솔에 한글 경로가 깨져서 출력되는 것도 방증. `C:\Users\hjc13\sai\PhotoLog`(영문 경로)로 프로젝트를 이동해서 해결. **앞으로 한글·OneDrive 경로는 피할 것.**
+5. **JPA 전환 시 `Member` 테이블명 불일치**: `Member` 엔티티에 `@Table(name="tbl_member")`를 안 붙이면 Hibernate 기본 네이밍 전략상 `tbl_member`가 아니라 `member`라는 새 테이블을 찾음. `@Table(name="tbl_member")` 추가로 해결. 같은 이유로 `memberRoleList`(`@ElementCollection`)는 커스터마이징 안 하면 `member_member_role_list`라는 이름으로 자동 생성됨 — 참고한 JPA 스켈레톤(`back_JPA.zip`)도 동일하게 커스터마이징 없이 그대로 뒀으므로, PhotoLog도 동일하게 유지하기로 결정 (스키마를 `ddl-auto`로 완전히 넘겼으므로 옛 테이블명을 지킬 이유가 없음).
 
 ## 9. 코드 리뷰에서 발견했지만 의도적으로 그대로 둔 것들
 
@@ -171,7 +176,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 - `API_SERVER_HOST` 상수를 `todoApi.js`에서 분리해 `api/host.js`로 이동 (`memberApi.js`, `util/jwtUtil.jsx`가 참조)
 - `router/root.jsx`: todo/products 라우트 제거, member 라우트만 유지
 - `components/menus/BasicMenu.jsx`: Todo/Products 메뉴 링크 제거
-- `schema.sql`: `tbl_member`, `tbl_member_role`만 유지 (cart/product/todo 테이블 제거)
+- (구) `schema.sql`: `tbl_member`, `tbl_member_role`만 유지 (cart/product/todo 테이블 제거) — 이후 JPA 전환으로 `schema.sql` 자체를 삭제하고 `ddl-auto`로 대체 (2절 참고)
 
 ## 13. 다음 할 일
 

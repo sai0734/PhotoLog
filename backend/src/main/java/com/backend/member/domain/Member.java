@@ -1,16 +1,20 @@
 package com.backend.member.domain;
 
 import lombok.*;
+import jakarta.persistence.*;
 
 import java.util.*;
 
+@Entity
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @ToString (exclude = "memberRoleList")
+@Table(name = "tbl_member")
 public class Member {
 
+  @Id
   private String email;
 
   private String pw;
@@ -19,6 +23,7 @@ public class Member {
 
   private boolean social;
 
+  @ElementCollection(fetch = FetchType.LAZY)
   @Builder.Default
   private List<MemberRole> memberRoleList = new ArrayList<>();
 

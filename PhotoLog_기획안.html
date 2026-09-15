@@ -333,7 +333,7 @@
 <div class="page">
 
   <header class="hero">
-    <div class="eyebrow">개인 프로젝트 기획안 · 최종안 v4</div>
+    <div class="eyebrow">개인 프로젝트 기획안 · 최종안 v5</div>
     <h1>PhotoLog</h1>
     <p class="tagline">출사지 공유 및 EXIF 기반 사진 커뮤니티 — AI 사진/장비 분석 기능 포함</p>
     <div class="meta-row">
@@ -388,6 +388,10 @@
       <div class="change-label">진행 현황</div>
       <div class="change-new">① 회원 기능 구현 완료(로그인/로그아웃/마이페이지 동작 확인), GitHub 저장소 개설 및 초기 커밋 완료</div>
     </div>
+    <div class="change-row">
+      <div class="change-label">Persistence 전환</div>
+      <div class="change-new">회원 기능을 MyBatis로 구현 완료한 뒤, 프로젝트 전체를 Spring Data JPA(Hibernate)로 전환 — 스키마 관리도 수동 <code class="inline">schema.sql</code>에서 <code class="inline">ddl-auto</code>로 이관, 재검증 완료</div>
+    </div>
   </div>
 
   <section>
@@ -401,7 +405,7 @@
     <dl class="stack">
       <div class="row"><dt>Frontend</dt><dd>React (TypeScript), Redux Toolkit, Axios, Vanilla CSS / CSS Modules, <code class="inline">exifr</code>(EXIF 파싱), SunCalc(월령 계산)</dd></div>
       <div class="row"><dt>Backend</dt><dd>JDK 21, Spring Boot 3.x, Spring Security (JWT — 기존 스켈레톤 코드 리딩 기반 학습)</dd></div>
-      <div class="row"><dt>Persistence</dt><dd>MyBatis, MariaDB</dd></div>
+      <div class="row"><dt>Persistence</dt><dd>Spring Data JPA(Hibernate), MariaDB</dd></div>
       <div class="row"><dt>AI Engine</dt><dd>Python 3.10+, FastAPI, LangChain, ChromaDB(RAG) · <code class="inline">Ollama</code> 로컬 오픈소스 LLM 서빙(1순위) 또는 <code class="inline">Groq</code> 무료 API(대안) — 자체 파인튜닝·vLLM은 스트레치 골</dd></div>
       <div class="row"><dt>API / Tooling</dt><dd>Kakao Map API, OpenWeatherMap, TossPayments(결제 데모, 스트레치), Postman, Swagger UI</dd></div>
     </dl>
@@ -472,7 +476,7 @@
 
     <h3>② 자유게시판 <span class="tag mvp">MVP</span></h3>
     <p><b>페이지</b> — 리스트(페이징), 상세, 등록(다중 이미지 업로드), 수정(삭제 기능 포함).</p>
-    <p>댓글·대댓글은 2단계로 제한합니다(대댓글에는 답글 불가). 다중 이미지 업로드는 우선 기본적인 <code class="inline">&lt;input type="file" multiple&gt;</code>로 동작을 먼저 완성하고, MyBatis <code class="inline">&lt;selectKey&gt;</code> + <code class="inline">&lt;foreach&gt;</code>로 <code class="inline">board_image</code> 테이블에 일괄 INSERT합니다. 게시글 삭제 시 연관된 이미지 파일과 댓글도 함께 정리되도록 설계합니다(DB <code class="inline">ON DELETE CASCADE</code> 또는 애플리케이션 레벨 처리).</p>
+    <p>댓글·대댓글은 2단계로 제한합니다(대댓글에는 답글 불가). 다중 이미지 업로드는 우선 기본적인 <code class="inline">&lt;input type="file" multiple&gt;</code>로 동작을 먼저 완성하고, JPA <code class="inline">@OneToMany</code>(<code class="inline">BoardImage</code> 엔티티) cascade로 <code class="inline">board_image</code> 테이블에 일괄 저장합니다(정확한 매핑 전략은 게시판 착수 시 결정). 게시글 삭제 시 연관된 이미지 파일과 댓글도 함께 정리되도록 설계합니다(JPA cascade + <code class="inline">orphanRemoval</code> 또는 애플리케이션 레벨 처리).</p>
     <p class="lead"><b>스트레치</b> — 카테고리 필터, 드래그 앤 드롭 · 클립보드 붙여넣기 업로드.</p>
 
     <h3>③ 사진 갤러리 <span class="tag mvp">MVP</span></h3>
@@ -555,7 +559,7 @@
 
   <footer>
     <span>PhotoLog · 개인 프로젝트 기획안</span>
-    <span>v4 — 회원 기능 구현 완료 반영</span>
+    <span>v5 — MyBatis → JPA 전환 반영</span>
   </footer>
 
 </div>

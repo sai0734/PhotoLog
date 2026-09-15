@@ -1,6 +1,6 @@
-package com.backend.mapper;
+package com.backend.repository;
 
-import com.backend.member.mapper.MemberMapper;
+import com.backend.member.repository.MemberRepository;
 import lombok.extern.log4j.Log4j2;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +12,10 @@ import com.backend.member.domain.MemberRole;
 
 @SpringBootTest
 @Log4j2
-public class MemberMapperTests {
+public class MemberRepositoryTests {
 
   @Autowired
-  private MemberMapper memberMapper;
+  private MemberRepository memberRepository;
 
   @Autowired
   private PasswordEncoder passwordEncoder;
@@ -43,8 +43,10 @@ public class MemberMapperTests {
           member.addRole(MemberRole.ADMIN);
       }
 
-      memberMapper.insert(member);
-      member.getMemberRoleList().forEach(role -> memberMapper.insertRole(email, role.name()));
+      memberRepository.save(member);
+
+      Member saved = memberRepository.getWithRoles(email);
+      log.info(saved);
     }
   }
 
@@ -53,7 +55,7 @@ public class MemberMapperTests {
 
     String email = "user9@aaa.com";
 
-    Member member = memberMapper.selectByEmail(email);
+    Member member = memberRepository.findById(email).orElseThrow();
 
     log.info("-----------------");
     log.info(member);

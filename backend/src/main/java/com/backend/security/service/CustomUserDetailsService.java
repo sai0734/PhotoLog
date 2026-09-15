@@ -2,13 +2,13 @@ package com.backend.security.service;
 
 import java.util.stream.Collectors;
 
+import com.backend.member.repository.MemberRepository;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import com.backend.member.domain.Member;
 import com.backend.member.dto.MemberDTO;
-import com.backend.member.mapper.MemberMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -18,14 +18,14 @@ import lombok.extern.log4j.Log4j2;
 @RequiredArgsConstructor
 public class CustomUserDetailsService implements UserDetailsService{
 
-  private final MemberMapper memberMapper;
+  private final MemberRepository memberRepository;
 
   @Override
   public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
 
     log.info("----------------loadUserByUsername-----------------------------");
 
-Member member = memberMapper.selectByEmail(username);
+Member member = memberRepository.getWithRoles(username);
 
     if(member == null){
       throw new UsernameNotFoundException("Not Found");
