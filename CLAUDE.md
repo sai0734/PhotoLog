@@ -15,7 +15,7 @@ KDT 풀스택 부트캠프 수료 직후 시작한 1인 포트폴리오 프로�
 
 | 영역 | 스택 |
 |---|---|
-| Frontend | React(Vite), TypeScript(신규 코드부터 적용 중 — 마이그레이션 진행 중), Redux Toolkit, Axios, Vanilla CSS/CSS Modules, `exifr`(EXIF 파싱), SunCalc(월령 계산) |
+| Frontend | React(Vite), TypeScript(**미착수** — `tsconfig.json` 없음, `.ts/.tsx` 0개, 본인이 직접 설정 예정), Redux Toolkit, Axios, **Tailwind CSS**(`tailwindcss ^3.4.19` — 스켈레톤에서 넘어옴, 유지/Vanilla CSS 교체 미결정), `exifr`(EXIF 파싱), SunCalc(월령 계산) |
 | Backend | JDK 21, Spring Boot 3.x, Spring Security + JWT(jjwt), Spring Data JPA(Hibernate), MariaDB |
 | AI | Python 3.10+, FastAPI, LangChain, ChromaDB(RAG), Ollama(로컬 LLM, 1순위) 또는 Groq(무료 API, 대안) |
 | 외부 API | Kakao Map API, OpenWeatherMap(무료 티어 5일 예보 한도), TossPayments(결제 데모, 스트레치) |
@@ -23,7 +23,7 @@ KDT 풀스택 부트캠프 수료 직후 시작한 1인 포트폴리오 프로�
 
 **AI 엔진 관련 의사결정**: 원래 Unsloth 파인튜닝 + vLLM 서빙을 고려했으나, GPU 확보·데이터셋 구축·학습 사이클 등 1인 개발 일정에 리스크가 커서 Ollama/Groq + RAG 조합으로 변경. "독립 AI 백엔드 구축, RAG 파이프라인 설계, 도메인 특화 프롬프트 엔지니어링" 스토리는 유지하면서 인프라 리스크만 제거.
 
-**Persistence 관련 의사결정 (2026-09-15)**: 회원 기능을 MyBatis(Mapper 인터페이스 + XML SQL)로 구현 완료한 뒤, 프로젝트 전체를 Spring Data JPA(Hibernate)로 전환하기로 결정. 참고용으로 보유하고 있던 KDT 부트캠프 JPA 버전 스켈레톤(`back_JPA.zip`)의 `domain`/`repository`/`service` 패턴을 그대로 따름. 스키마 관리도 수동 `schema.sql`(`spring.sql.init.mode=always`)에서 `spring.jpa.hibernate.ddl-auto=update`로 함께 전환, `schema.sql` 파일은 삭제. `Member`/`MemberRole` 기준으로 전환·빌드·프론트엔드 연동(로그인, 계정 생성)까지 검증 완료. **이후 게시판부터는 처음부터 JPA로 구현**하며, MyBatis 관련 설명은 이 문서에서 전부 JPA 기준으로 갱신함.
+**Persistence 관련 의사결정 (2026-09-15)**: 회원 기능을 MyBatis(Mapper 인터페이스 + XML SQL)로 구현 완료한 뒤, 프로젝트 전체를 Spring Data JPA(Hibernate)로 전환하기로 결정. 참고용으로 보유하고 있던 KDT 부트캠프 JPA 버전 스켈레톤(`back_JPA.zip`)의 `domain`/`repository`/`service` 패턴을 그대로 따름. 스키마 관리도 수동 `schema.sql`(`spring.sql.init.mode=always`)에서 `spring.jpa.hibernate.ddl-auto=update`로 함께 전환, `schema.sql` 파일은 삭제. `Member`/`MemberRole` 기준으로 전환·빌드 후, `MemberRepositoryTests`로 계정을 생성해 프론트엔드 로그인까지 검증 완료(회원가입 화면 자체는 14절 기록대로 아직 미구현이라 테스트 코드로 계정을 만듦). **이후 게시판부터는 처음부터 JPA로 구현**하며, MyBatis 관련 설명은 이 문서에서 전부 JPA 기준으로 갱신함.
 
 ## 3. 시스템 아키텍처
 
@@ -91,12 +91,13 @@ com.backend
 
 ## 6. 핵심 기능 명세 (구현 순서: 회원 → 게시판 → 갤러리 → 야간출사지도 → AI서비스)
 
-### ① 회원 및 인증 (MVP) — ✅ 구현 완료, GitHub 푸시 완료 (JPA 전환 완료)
-- 페이지: 로그인 / 회원가입(아이디·비밀번호·닉네임 + 아이디 중복확인 + 프로필사진 1장 멀티파트) / 마이페이지(닉네임·프로필사진 수정, 회원탈퇴)
+### ① 회원 및 인증 (MVP) — ⚠️ 부분 구현 (로그인 + 정보수정만 동작, JPA 전환 완료 — 14절 참고)
+- 목표 페이지: 로그인 / 회원가입(아이디·비밀번호·닉네임 + 아이디 중복확인 + 프로필사진 1장 멀티파트) / 마이페이지(닉네임·프로필사진 수정, 회원탈퇴)
+- **실제 구현 현황**: 로그인(Spring formLogin `/api/member/login`) + `PUT /api/member/modify` + `GET /api/member/refresh`만 존재 (Persistence는 MyBatis → Spring Data JPA로 전환·재검증 완료, 2절 Persistence 관련 의사결정 참고). 회원가입·아이디 중복확인·프로필사진 업로드·회원탈퇴(소프트 삭제)는 **엔드포인트/스키마/프론트 모두 미구현**
 - JWT 기반 인증(BCrypt 암호화, Access/Refresh Token) — 기존 스켈레톤 코드 리딩으로 이해
-- 회원탈퇴는 **소프트 삭제**: 탈퇴 후에도 게시글·사진은 유지, 작성자 표시만 "탈퇴한 회원" 등으로 대체
+- 회원탈퇴는 **소프트 삭제** 예정: 탈퇴 후에도 게시글·사진은 유지, 작성자 표시만 "탈퇴한 회원" 등으로 대체
 - 스트레치: 이메일 인증, 소셜 로그인, 관리자 페이지 회원관리
-- 로그인/로그아웃/마이페이지 실제 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (2절 Persistence 관련 의사결정 참고)
+- 로그인/로그아웃/정보수정 흐름 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (단, `ModifyComponent` 비번 덮어쓰기 버그 있음 — 14절)
 
 ### ② 자유게시판 (MVP) — 다음 작업 대상, 미착수
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
@@ -180,9 +181,42 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 
 ## 13. 다음 할 일
 
-1. **게시판(자유게시판) 기능 구현 시작** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천
-2. Spring Security + JWT 코드 전체 리딩 (아직 미착수 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음)
-3. 프론트엔드 TypeScript 마이그레이션 진행 중 (본인이 직접 설정 중)
+1. **14절 코드 리뷰 지적사항 정리** — 게시판 착수 전에 최소한 `ModifyComponent` 비번 덮어쓰기 버그 + `/api/member/**` 인증 경로 정책은 손보는 걸 권장. 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 나머지도 이때 마저 끝낼지 판단
+2. **게시판(자유게시판) 기능 구현 시작** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천
+3. Spring Security + JWT 코드 전체 리딩 (아직 미착수 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음)
+4. 프론트엔드 TypeScript 마이그레이션 (미착수 — 본인이 직접 설정 예정)
+
+## 14. 코드 리뷰 지적사항 (2026-09-09, 미해결 — 개발 원칙상 본인이 직접 수정)
+
+Claude Code 세션에서 전체 코드 리뷰 진행. 빌드는 백엔드 `./gradlew compileJava` / 프론트 `vite build` 모두 통과. git 추적 상태 정상(`.idea/`·`.gradle/`·`upload/` 제외됨). 아래는 발견됐지만 **아직 안 고친 것들**.
+
+### 🔴 회원 기능 — 기획서 ①은 "완료"였으나 실제로 없는 것 (6절 ① 갱신함)
+- 회원가입 엔드포인트 없음 (`MemberMapper.insert`는 있으나 호출부가 테스트 코드뿐)
+- 아이디(이메일) 중복확인 엔드포인트 없음
+- 프로필 사진 업로드 없음 — `Member` 도메인·`tbl_member` 스키마에 이미지 컬럼 없음, `CustomFileUtil` 미사용
+- 회원탈퇴(소프트 삭제) 없음 — 스키마에 del 플래그 없음, 매퍼에 회원 delete 없음
+- 프론트도 동일: `api/memberApi.js`에 `loginPost`/`modifyMember`만, 회원가입·중복확인 API·라우트 없음
+
+### 🔴 modify 흐름 버그
+- `components/member/ModifyComponent.jsx:23` — 마이페이지 진입 시 `pw`를 하드코딩 `"ABCD"`로 채움. 사용자가 비번 안 건드리고 닉네임만 바꿔 저장 → `MemberServiceImpl.modifyMember`가 `passwordEncoder.encode("ABCD")` 실행 → **비밀번호가 ABCD로 덮어써져** 이후 기존 비번 로그인 불가
+- `member/service/MemberServiceImpl.java:30` — `member.changeSocial(false)` 무조건 호출. 의미 불명, 지금은 무해하나 소셜 붙이면 사고
+- `MemberModifyDTO.email`이 `@RequestBody`로 들어오고 인가 체크 전혀 없음 → 본문에 임의 이메일 넣으면 그 회원 정보 수정 가능. `SecurityContext` 인증 주체와 대조 안 함
+
+### 🔴 JWTCheckFilter — `/api/member/**` 전체 인증 스킵
+- `security/filter/JWTCheckFilter.java:38` `if(path.startsWith("/api/member/")) return true;` → `login`/`refresh`뿐 아니라 `modify`, 앞으로 `/api/member/` 밑에 들어올 마이페이지·탈퇴 API까지 전부 무인증 노출. permitAll 경로를 `login`/`refresh`/`join`/중복확인 등으로 명시적으로 좁혀야 함
+
+### 🟡 중간
+- `security/controller/APIRefreshController.java:49` `(Integer)claims.get("exp")` — jjwt 0.11.5 + gson 직렬화면 `Long`으로 올 확률 높아 `ClassCastException` 위험 (9절에도 기록). access token TTL이 10분이라 로그인 10분 후 첫 API 호출 시 프론트가 이 경로를 자동 호출 → "미확인"으로 두지 말고 refresh 흐름 실제 테스트 필요
+- `APIRefreshController`가 `@RequestMapping`이라 모든 메서드 허용 → `@GetMapping`으로 좁힐 것. refreshToken을 쿼리스트링으로 전달(`util/jwtUtil.jsx:13`) → 서버 로그·브라우저 히스토리에 평문 노출, 헤더/body 권장
+- `global/dto/PageResponseDTO.java:53` `totalPage = pageNumList.size()` — 이건 "현재 블록의 페이지 수"지 전체 페이지 수가 아님. 게시판에서 전체 페이지 필요하면 `last` 값 별도 노출
+- `PageRequestDTO`에 MyBatis용 offset/limit(`getSkip()` 등) 필드 없음 → 게시판 페이징 쿼리 짜기 전에 추가 필요
+- `@Valid` 미적용 — `CustomControllerAdvice`가 `MethodArgumentNotValidException`을 처리하도록 돼있으나, 컨트롤러에 `@Valid`가 없고 DTO에 제약 어노테이션도 없어 검증 자체가 안 돎
+
+### 🟢 소소
+- `global/util/CustomFileUtil.java:39` `mkdir()` → 상위 폴더 없으면 실패, `mkdirs()`가 안전
+- `CustomFileUtil.java:86` `winter.jpg` 폴백 파일이 실존하지 않음 → 폴백 타면 그냥 500 (9절 기록됨)
+- `schema.sql` `tbl_member_role`에 `(member_email, role_name)` PK/UNIQUE 없음 → 같은 롤 중복 삽입 가능 (deleteRoles 후 재삽입 패턴이라 실무 영향은 작음)
+- `CustomSecurityConfig.java:69` `allowedOriginPatterns("*")` + `allowCredentials(true)` → 프로덕션 브라우저는 거부. 로컬 데모는 무관
 
 ---
 *이 문서는 Cowork(Claude)와의 기획·구현 대화를 정리한 인수인계 문서입니다. 프로젝트 루트에 `CLAUDE.md`로 저장해두면 Claude Code가 세션 시작 시 자동으로 읽어들여 컨텍스트로 활용합니다.*
