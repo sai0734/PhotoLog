@@ -36,7 +36,7 @@ public class CustomFileUtil {
     File tempFolder = new File(uploadPath);
 
     if(tempFolder.exists() == false) {
-      tempFolder.mkdir();
+      tempFolder.mkdirs();
     }
 
     uploadPath = tempFolder.getAbsolutePath();
@@ -83,7 +83,7 @@ public class CustomFileUtil {
     Resource resource = new FileSystemResource(uploadPath + File.separator + fileName);
 
     if( !resource.isReadable()){
-      resource = new FileSystemResource(uploadPath + File.separator + "winter.jpg"); 
+      return ResponseEntity.notFound().build();
     }
 
     HttpHeaders headers = new HttpHeaders();

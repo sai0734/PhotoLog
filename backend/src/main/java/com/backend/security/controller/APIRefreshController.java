@@ -2,10 +2,7 @@ package com.backend.security.controller;
 
 import java.util.Map;
 
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import com.backend.security.securityutil.CustomJWTException;
 import com.backend.security.securityutil.JWTUtil;
@@ -18,7 +15,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class APIRefreshController {
 
-@RequestMapping("/api/member/refresh")
+@PostMapping("/api/member/refresh")
 public Map<String, Object> refresh(
     @RequestHeader("Authorization") String authHeader, 
     @RequestParam("refreshToken") String refreshToken

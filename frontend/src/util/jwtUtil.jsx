@@ -9,10 +9,10 @@ const refreshJWT = async (accessToken, refreshToken) => {
 
   const header = { headers: { Authorization: `Bearer ${accessToken}` } };
 
-  const res = await axios.get(
-    `${host}/api/member/refresh?refreshToken=${refreshToken}`,
-    header,
-  );
+  const form = new URLSearchParams();
+  form.append("refreshToken", refreshToken);
+
+  const res = await axios.post(`${host}/api/member/refresh`, form, header);
 
   console.log("----------------------");
   console.log(res.data);

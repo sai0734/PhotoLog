@@ -1,5 +1,6 @@
 package com.backend.member.controller;
 
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.backend.member.dto.MemberModifyDTO;
@@ -22,7 +23,7 @@ public class MemberController {
     private final MemberService memberService;
 
     @PutMapping("/api/member/modify")
-  public Map<String,String> modify(@RequestBody MemberModifyDTO memberModifyDTO) {
+    public Map<String,String> modify(@Valid @RequestBody MemberModifyDTO memberModifyDTO) {
 
     log.info("member modify: " + memberModifyDTO);
 

@@ -144,7 +144,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 
 ## 9. 코드 리뷰에서 발견했지만 의도적으로 그대로 둔 것들
 
-- `APIRefreshController.checkTime((Integer)claims.get("exp"))` — jjwt 버전에 따라 `exp` claim이 `Long`으로 올 수 있어 `ClassCastException` 위험 잠재. 실제 토큰 재발급 테스트 시 확인 필요 (아직 미확인).
+- `APIRefreshController.checkTime((Integer)claims.get("exp"))` — **2026-09-15 실제 검증 완료**: 프로젝트가 쓰는 jjwt 0.11.5 + Jackson 조합으로 토큰 생성·파싱 테스트한 결과 `claims.get("exp")`는 `java.lang.Integer`로 들어와서 `(Integer)` 캐스팅 안전함(`ClassCastException` 안 터짐). 단, `exp`(Unix epoch 초)가 `Integer.MAX_VALUE`를 넘는 **2038년 이후엔 `Long`이 필요해져서 다시 터질 수 있음** — 그 전에 `(long) claims.get("exp")` 같은 안전한 방식으로 바꿔두는 게 정석이지만, 포트폴리오 프로젝트 수명 내에는 문제 없음.
 - `MemberDTO.getClaims()`가 `pw`(BCrypt 해시)를 JWT claims에 포함시켜서, 발급된 access/refresh 토큰을 클라이언트가 디코딩하면 해시된 비밀번호가 노출됨. 로컬 전용 데모라 당장 위험은 낮다고 판단하고 그대로 둠. 다른 기능에서 claims 구조를 참고할 땐 `pw`는 빼는 게 정석.
 - `RootConfig`의 `ModelMapper` 빈 — 현재는 아무도 안 쓰지만, 앞으로 게시판/갤러리에서 Entity↔DTO 변환에 쓸 계획이라 유지하기로 결정(지우지 않음).
 - `pages/member/ModifyPage.jsx` 내부 변수명 오타(`ModfyPage`→`ModifyPage`) — 수정 완료.
@@ -160,7 +160,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 - `backend/.gitignore`: `upload/`, `build/`, `.gradle/`, `.idea/`
 - `frontend/.gitignore`: Vite 기본값 (`node_modules`, `dist` 등)
 - **`application.properties`는 의도적으로 `.gitignore`에서 제외** — DB 계정정보(`photologdbuser`/`photologdbuser`, 로컬 데모용 단순 비밀번호)가 그대로 커밋되어 Public 저장소에 노출됨. 실서비스라면 절대 이렇게 하면 안 되지만, 로컬 전용 데모 프로젝트라는 걸 인지하고 감수하기로 한 결정.
-- 다른 컴퓨터에서 이어서 개발하려면: `git clone` → (frontend) `npm install` → (backend) IntelliJ로 열거나 `./gradlew build` → 로컬에 MariaDB 계정/DB 새로 생성(`application.properties`에 있는 계정정보 그대로 맞춰서) → `upload/` 폴더는 앱이 자동 생성.
+- 다른 컴퓨터에서 이어서 개발하려면: `git clone` → (frontend) `npm install` → (backend) IntelliJ로 열거나 `./gradlew build` → 로컬에 MariaDB 계정/DB 새로 생성(`application.properties`에 있는 계정정보 그대로 맞춰서) → `upload/` 폴더는 앱이 자동 생성. (`CustomFileUtil.getFile()`이 이미지 없으면 404로 응답하도록 바뀌어서, 별도로 챙겨야 할 파일은 없음 — 14절 참고)
 
 ## 11. 네이밍 컨벤션
 
@@ -181,12 +181,13 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 
 ## 13. 다음 할 일
 
-**진행 순서 (2026-09-15 확정): 1 → 3 → 4 → 2**
+**진행 순서 (2026-09-15 최종 확정)**
 
-1. **14절 코드 리뷰 지적사항 정리** — 최소한 `ModifyComponent` 비번 덮어쓰기 버그 + `/api/member/**` 인증 경로 정책은 손보는 걸 권장. 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 나머지도 이때 마저 끝낼지 판단
+1. **14절 코드 리뷰 지적사항 정리** — ✅ 완료 (아래 내용은 2026-09-15에 전부 해결됨, 14절 참고). 남은 건 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 자체와 CORS 참고 항목뿐
 2. Spring Security + JWT 코드 전체 리딩 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음
-3. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정)
-4. **게시판(자유게시판) 기능 구현 시작** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천
+3. **게시판(자유게시판) 기능 구현** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천. 지금은 JS(`.jsx`)로 작업 (TS 마이그레이션 아직 착수 전, 4번 참고)
+4. **회원 기능 마무리** — 회원가입, 아이디 중복확인, 프로필사진 업로드, 회원탈퇴(소프트 삭제) — 14절 🔴 항목
+5. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정) — **회원 기능까지 다 끝난 뒤에 진행하기로 결정**
 
 참고: Member 엔티티는 지금 상태(스켈레톤 컨벤션, `@Column(nullable=false)` 없음) 유지로 확정. **게시판 엔티티(`Board`/`BoardImage`/`Comment`)부터는 `@Column(nullable=false)` 등 not-null 제약을 새로 적용하기로 결정** (Member엔 소급 적용 안 함).
 
@@ -194,33 +195,32 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 
 Claude Code 세션에서 전체 코드 리뷰 진행. 빌드는 백엔드 `./gradlew compileJava` / 프론트 `vite build` 모두 통과. git 추적 상태 정상(`.idea/`·`.gradle/`·`upload/` 제외됨). 아래는 발견됐지만 **아직 안 고친 것들**.
 
-### 🔴 회원 기능 — 기획서 ①은 "완료"였으나 실제로 없는 것 (6절 ① 갱신함)
+### 🔴 회원 기능 — 기획서 ①은 "완료"였으나 실제로 없는 것 (6절 ① 갱신함) — 미해결
 - 회원가입 엔드포인트 없음 (`MemberMapper.insert`는 있으나 호출부가 테스트 코드뿐)
 - 아이디(이메일) 중복확인 엔드포인트 없음
 - 프로필 사진 업로드 없음 — `Member` 도메인·`tbl_member` 스키마에 이미지 컬럼 없음, `CustomFileUtil` 미사용
 - 회원탈퇴(소프트 삭제) 없음 — 스키마에 del 플래그 없음, 매퍼에 회원 delete 없음
 - 프론트도 동일: `api/memberApi.js`에 `loginPost`/`modifyMember`만, 회원가입·중복확인 API·라우트 없음
 
-### 🔴 modify 흐름 버그
-- `components/member/ModifyComponent.jsx:23` — 마이페이지 진입 시 `pw`를 하드코딩 `"ABCD"`로 채움. 사용자가 비번 안 건드리고 닉네임만 바꿔 저장 → `MemberServiceImpl.modifyMember`가 `passwordEncoder.encode("ABCD")` 실행 → **비밀번호가 ABCD로 덮어써져** 이후 기존 비번 로그인 불가
-- `member/service/MemberServiceImpl.java:30` — `member.changeSocial(false)` 무조건 호출. 의미 불명, 지금은 무해하나 소셜 붙이면 사고
-- `MemberModifyDTO.email`이 `@RequestBody`로 들어오고 인가 체크 전혀 없음 → 본문에 임의 이메일 넣으면 그 회원 정보 수정 가능. `SecurityContext` 인증 주체와 대조 안 함
+### ✅ modify 흐름 버그 — 2026-09-15 해결
+- `components/member/ModifyComponent.jsx` — pw 하드코딩(`"ABCD"`) 제거, 빈 문자열 기본값 + 안 바꿨으면 `pw` 필드 자체를 요청에서 제외(`{pw, ...rest} = member` 구조분해). `useEffect` 제거하고 `useState` lazy initializer로 대체, `handleChange` 불변성 위반 수정(`setMember({...member, [e.target.name]: e.target.value})`)
+- `member/service/MemberServiceImpl.java` — `pw`가 `null`이면 `changePw()` 호출 스킵(NPE 방지), `changeSocial(false)`/`changeNickname`/`save` 중복 제거
 
-### 🔴 JWTCheckFilter — `/api/member/**` 전체 인증 스킵
-- `security/filter/JWTCheckFilter.java:38` `if(path.startsWith("/api/member/")) return true;` → `login`/`refresh`뿐 아니라 `modify`, 앞으로 `/api/member/` 밑에 들어올 마이페이지·탈퇴 API까지 전부 무인증 노출. permitAll 경로를 `login`/`refresh`/`join`/중복확인 등으로 명시적으로 좁혀야 함
+### ✅ JWTCheckFilter — `/api/member/**` 전체 인증 스킵 — 2026-09-15 해결
+- `security/filter/JWTCheckFilter.java` `shouldNotFilter()` — `/api/member/` 전체 스킵 대신 `/api/member/login`, `/api/member/refresh`만 명시적으로 스킵하도록 좁힘. `curl`로 직접 검증: `PUT /api/member/modify`에 토큰 없이 요청 시 이제 `{"error":"ERROR_ACCESS_TOKEN"}`으로 정상 차단됨
 
 ### 🟡 중간
-- `security/controller/APIRefreshController.java:49` `(Integer)claims.get("exp")` — jjwt 0.11.5 + gson 직렬화면 `Long`으로 올 확률 높아 `ClassCastException` 위험 (9절에도 기록). access token TTL이 10분이라 로그인 10분 후 첫 API 호출 시 프론트가 이 경로를 자동 호출 → "미확인"으로 두지 말고 refresh 흐름 실제 테스트 필요
-- `APIRefreshController`가 `@RequestMapping`이라 모든 메서드 허용 → `@GetMapping`으로 좁힐 것. refreshToken을 쿼리스트링으로 전달(`util/jwtUtil.jsx:13`) → 서버 로그·브라우저 히스토리에 평문 노출, 헤더/body 권장
-- `global/dto/PageResponseDTO.java:53` `totalPage = pageNumList.size()` — 이건 "현재 블록의 페이지 수"지 전체 페이지 수가 아님. 게시판에서 전체 페이지 필요하면 `last` 값 별도 노출
-- `PageRequestDTO`에 MyBatis용 offset/limit(`getSkip()` 등) 필드 없음 → 게시판 페이징 쿼리 짜기 전에 추가 필요
-- `@Valid` 미적용 — `CustomControllerAdvice`가 `MethodArgumentNotValidException`을 처리하도록 돼있으나, 컨트롤러에 `@Valid`가 없고 DTO에 제약 어노테이션도 없어 검증 자체가 안 돎
+- ✅ `security/controller/APIRefreshController.java:49` `(Integer)claims.get("exp")` — **2026-09-15 검증 완료, 9절 참고**: 현재 jjwt 0.11.5+Jackson 조합에서 안전함(2038년 전까지)
+- ✅ `APIRefreshController` — **2026-09-15 해결**: `@RequestMapping` → `@PostMapping`으로 좁힘 (GET은 405로 차단 확인). refreshToken도 쿼리스트링 대신 body로 이동 — `util/jwtUtil.jsx`의 `refreshJWT`가 `URLSearchParams`로 body를 구성해 `axios.post(url, form, header)` 형태로 전송(`@RequestParam`은 그대로 둬도 form 형식 POST body를 자동으로 읽음). curl로 GET 차단·POST+body 동작 둘 다 검증 완료
+- `global/dto/PageResponseDTO.java:53` `totalPage = pageNumList.size()` — 이건 "현재 블록의 페이지 수"지 전체 페이지 수가 아님. 게시판에서 전체 페이지 필요하면 `last` 값 별도 노출 — 미해결
+- ~~`PageRequestDTO`에 MyBatis용 offset/limit(`getSkip()` 등) 필드 없음~~ — **JPA 전환으로 무효화됨**: MyBatis 수동 페이징 기준 지적이었음. JPA면 Spring Data의 `Pageable`/`PageRequest`를 쓰는 게 정석이라 접근 방식 자체가 달라짐. 게시판 착수 시점에 다시 판단
+- ✅ `@Valid` 미적용 — **2026-09-15 해결**: `build.gradle`에 `spring-boot-starter-validation` 의존성 추가(3.0부터 `starter-web`에서 분리돼서 별도 추가 필요), `MemberModifyDTO`의 `email`/`nickname`에 `@NotBlank`(`pw`는 비번 안 바꾸는 경우 `null` 허용해야 해서 **의도적으로 제외**), `MemberController.modify()`에 `@Valid` 추가. curl로 검증: 빈 닉네임 → `CustomControllerAdvice`가 `"공백일 수 없습니다"` 에러로 차단, 정상 닉네임 → 통과, `pw` 없이도 정상 동작(NPE 방지 로직과 충돌 없음) 확인. **주의**: 새 의존성 추가는 devtools 핫리로드로 안 반영됨 — 서버 완전 재시작 필요했음
 
 ### 🟢 소소
-- `global/util/CustomFileUtil.java:39` `mkdir()` → 상위 폴더 없으면 실패, `mkdirs()`가 안전
-- `CustomFileUtil.java:86` `winter.jpg` 폴백 파일이 실존하지 않음 → 폴백 타면 그냥 500 (9절 기록됨)
-- `schema.sql` `tbl_member_role`에 `(member_email, role_name)` PK/UNIQUE 없음 → 같은 롤 중복 삽입 가능 (deleteRoles 후 재삽입 패턴이라 실무 영향은 작음)
-- `CustomSecurityConfig.java:69` `allowedOriginPatterns("*")` + `allowCredentials(true)` → 프로덕션 브라우저는 거부. 로컬 데모는 무관
+- ✅ `global/util/CustomFileUtil.java:39` `mkdir()` → `mkdirs()`로 수정 완료 (2026-09-15)
+- ✅ `CustomFileUtil.java:86` `winter.jpg` 폴백 — **2026-09-15 해결**: 처음엔 대체 이미지 파일(`siru.jpg`)로 바꾸는 방식을 시도했으나, `upload/`가 `.gitignore` 대상이라 다른 컴퓨터·평가자가 clone했을 때 그 파일이 없어 같은 문제가 재발한다는 걸 확인 → **최종적으로 파일 의존 없는 방식으로 변경**: 파일이 없으면 `ResponseEntity.notFound().build()`로 명확히 404 응답. 브라우저가 기본 "이미지 깨짐" 아이콘을 보여줌. "예쁜 기본 이미지" UX는 필요해지면 프론트엔드에서 `<img onError>`로 git 추적되는 정적 아이콘으로 교체하는 걸 권장(백엔드 파일 의존 없앰)
+- ~~`schema.sql` `tbl_member_role`에 PK/UNIQUE 없음~~ — **JPA 전환으로 무효화됨**: `schema.sql` 자체가 삭제됨(2절 Persistence 의사결정 참고). 역할 저장은 이제 `@ElementCollection`이 자동 생성하는 `member_member_role_list` 테이블이 담당
+- `CustomSecurityConfig.java:69` `allowedOriginPatterns("*")` + `allowCredentials(true)` → 프로덕션 브라우저는 거부. 로컬 데모는 무관 — 미해결
 
 ---
 *이 문서는 Cowork(Claude)와의 기획·구현 대화를 정리한 인수인계 문서입니다. 프로젝트 루트에 `CLAUDE.md`로 저장해두면 Claude Code가 세션 시작 시 자동으로 읽어들여 컨텍스트로 활용합니다.*
