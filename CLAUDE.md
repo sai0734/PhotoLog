@@ -181,10 +181,14 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 
 ## 13. 다음 할 일
 
-1. **14절 코드 리뷰 지적사항 정리** — 게시판 착수 전에 최소한 `ModifyComponent` 비번 덮어쓰기 버그 + `/api/member/**` 인증 경로 정책은 손보는 걸 권장. 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 나머지도 이때 마저 끝낼지 판단
-2. **게시판(자유게시판) 기능 구현 시작** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천
-3. Spring Security + JWT 코드 전체 리딩 (아직 미착수 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음)
-4. 프론트엔드 TypeScript 마이그레이션 (미착수 — 본인이 직접 설정 예정)
+**진행 순서 (2026-09-15 확정): 1 → 3 → 4 → 2**
+
+1. **14절 코드 리뷰 지적사항 정리** — 최소한 `ModifyComponent` 비번 덮어쓰기 버그 + `/api/member/**` 인증 경로 정책은 손보는 걸 권장. 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 나머지도 이때 마저 끝낼지 판단
+2. Spring Security + JWT 코드 전체 리딩 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음
+3. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정)
+4. **게시판(자유게시판) 기능 구현 시작** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천
+
+참고: Member 엔티티는 지금 상태(스켈레톤 컨벤션, `@Column(nullable=false)` 없음) 유지로 확정. **게시판 엔티티(`Board`/`BoardImage`/`Comment`)부터는 `@Column(nullable=false)` 등 not-null 제약을 새로 적용하기로 결정** (Member엔 소급 적용 안 함).
 
 ## 14. 코드 리뷰 지적사항 (2026-09-09, 미해결 — 개발 원칙상 본인이 직접 수정)
 

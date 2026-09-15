@@ -22,15 +22,16 @@ public class MemberServiceImpl implements MemberService {
 
     @Override
   public void modifyMember(MemberModifyDTO memberModifyDTO) {
+      Member member = Optional.ofNullable(memberRepository.getWithRoles(memberModifyDTO.getEmail()))
+              .orElseThrow();
 
-    Member member = Optional.ofNullable(memberRepository.getWithRoles(memberModifyDTO.getEmail()))
-        .orElseThrow();
+      if (memberModifyDTO.getPw() != null) {
+        member.changePw(passwordEncoder.encode(memberModifyDTO.getPw()));
+      }
 
-    member.changePw(passwordEncoder.encode(memberModifyDTO.getPw()));
-    member.changeSocial(false);
-    member.changeNickname(memberModifyDTO.getNickname());
+      member.changeSocial(false);
+      member.changeNickname(memberModifyDTO.getNickname());
 
-    memberRepository.save(member);
-
+      memberRepository.save(member);
   }
 }

@@ -1,37 +1,31 @@
-import { useEffect } from "react";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { modifyMember } from "../../api/memberApi";
 import useCustomLogin from "../../hooks/useCustomLogin";
 import ResultModal from "../common/ResultModal";
 
-const initState = {
-  email: "",
-  pw: "",
-  nickname: "",
-};
-
 const ModifyComponent = () => {
-  const [member, setMember] = useState(initState);
   const loginInfo = useSelector((state) => state.loginSlice);
-
+  const [member, setMember] = useState(() => ({ ...loginInfo, pw: "" }));
   const { moveToLogin } = useCustomLogin();
   const [result, setResult] = useState();
 
-  useEffect(() => {
-    setMember({ ...loginInfo, pw: "ABCD" });
-  }, [loginInfo]);
-
   const handleChange = (e) => {
-    member[e.target.name] = e.target.value;
-
-    setMember({ ...member });
+    setMember({ ...member, [e.target.name]: e.target.value });
   };
 
   const handleClickModify = () => {
-    modifyMember(member).then((result) => {
-      setResult("Modified");
-    });
+    // eslint-disable-next-line no-unused-vars
+    const { pw, ...rest } = member;
+    if (member.pw === "" || member.pw === null) {
+      modifyMember(rest).then(() => {
+        setResult("Modified");
+      });
+    } else {
+      modifyMember(member).then(() => {
+        setResult("Modified");
+      });
+    }
   };
 
   const closeModal = () => {
