@@ -19,9 +19,12 @@ KDT 풀스택 부트캠프 수료 직후 시작한 1인 포트폴리오 프로�
 | Backend | JDK 21, Spring Boot 3.x, Spring Security + JWT(jjwt), Spring Data JPA(Hibernate), MariaDB |
 | AI | Python 3.10+, FastAPI, LangChain, ChromaDB(RAG), Ollama(로컬 LLM, 1순위) 또는 Groq(무료 API, 대안) |
 | 외부 API | Kakao Map API, OpenWeatherMap(무료 티어 5일 예보 한도), TossPayments(결제 데모, 스트레치) |
+| Cache | Redis(**도입 확정, 착수 전** — Lettuce 클라이언트, `spring-boot-starter-data-redis`) |
 | 툴 | Postman, Swagger UI |
 
 **AI 엔진 관련 의사결정**: 원래 Unsloth 파인튜닝 + vLLM 서빙을 고려했으나, GPU 확보·데이터셋 구축·학습 사이클 등 1인 개발 일정에 리스크가 커서 Ollama/Groq + RAG 조합으로 변경. "독립 AI 백엔드 구축, RAG 파이프라인 설계, 도메인 특화 프롬프트 엔지니어링" 스토리는 유지하면서 인프라 리스크만 제거.
+
+**Redis/Kafka 관련 의사결정 (2026-09-17)**: **Redis 도입 확정.** 로컬에 Redis 서버 설치 + `spring-boot-starter-data-redis`(내부적으로 Lettuce 클라이언트 드라이버 사용, MariaDB의 `mariadb-java-client`와 같은 역할) 추가 예정. REST API처럼 HTTP로 통신하는 게 아니라, RESP 프로토콜 기반 TCP 커넥션 풀을 통해 `RedisTemplate.opsForValue()` 같은 메서드 호출로 사용 — 통신 방식은 REST API보다 오히려 JDBC(MariaDB 연결)에 가까움. 용도 후보: JWT Refresh Token 블랙리스트(로그아웃 시 실제 토큰 무효화), OpenWeatherMap 응답 캐싱(④ 야간 출사지도, 무료 티어 호출 횟수 절약). 정확한 도입 시점·구현 범위는 미정. **Kafka는 도입 여부 보류(미정)** — 붙인다면 ⑤ AI 서비스 단계에서 "사진 업로드 → AI 피드백 생성" 흐름을 비동기 이벤트로 처리하는 스트레치 골로 고려 중이나, 1인 로컬 데모 규모상 실질적 필요성보다는 학습·포트폴리오 목적에 가까움. **우선순위는 변하지 않음 — 게시판(②) 구현이 여전히 다음 작업.**
 
 **Persistence 관련 의사결정 (2026-09-15)**: 회원 기능을 MyBatis(Mapper 인터페이스 + XML SQL)로 구현 완료한 뒤, 프로젝트 전체를 Spring Data JPA(Hibernate)로 전환하기로 결정. 참고용으로 보유하고 있던 KDT 부트캠프 JPA 버전 스켈레톤(`back_JPA.zip`)의 `domain`/`repository`/`service` 패턴을 그대로 따름. 스키마 관리도 수동 `schema.sql`(`spring.sql.init.mode=always`)에서 `spring.jpa.hibernate.ddl-auto=update`로 함께 전환, `schema.sql` 파일은 삭제. `Member`/`MemberRole` 기준으로 전환·빌드 후, `MemberRepositoryTests`로 계정을 생성해 프론트엔드 로그인까지 검증 완료(회원가입 화면 자체는 14절 기록대로 아직 미구현이라 테스트 코드로 계정을 만듦). **이후 게시판부터는 처음부터 JPA로 구현**하며, MyBatis 관련 설명은 이 문서에서 전부 JPA 기준으로 갱신함.
 
@@ -58,6 +61,12 @@ EXIF는 서버 왕복 없이 **프론트엔드에서 `exifr`로 즉시 파싱**�
 **패키지 구조 원칙(백엔드)**: 기능 단위 패키지 구조(package-by-feature). 아래 5절 참고. 게시판·갤러리 등 새 기능도 동일 컨벤션(`com.backend.board`, `com.backend.gallery`)을 따를 것.
 
 **개발 순서 원칙**: 5개 핵심 기능을 동시에 벌리지 않고 순서대로 하나씩. 각 기능은 화면-API-DB가 끝까지 연결되는 최소 동작 버전(뼈대)을 먼저 완성해 파이프라인이 도는 걸 확인한 뒤, 예외 처리·유효성 검증·UX 디테일을 단계적으로 채운다.
+
+**API 검증 절차 (2026-09-17 확정, 새 API 만들 때마다 매번 적용)**: 새 Repository/Service/Controller를 추가할 때마다 아래 순서로 검증한다. 본인이 잊기 쉬워서 Claude가 매번 먼저 상기시켜주기로 함.
+1. **Repository 테스트** — 새/변경된 `JpaRepository` 메서드를 검증하는 테스트 작성 (`MemberRepositoryTests` 참고)
+2. **Service 테스트** — Service 레이어에 로직이 있으면 그것도 테스트
+3. **Postman으로 Controller 엔드포인트 직접 호출** — 상태 코드·응답 바디·인증 헤더 동작 확인. 본인이 Postman 사용에 아직 익숙하지 않아서 **연습 목적으로 매번 진행** (요청 메서드/URL/헤더/바디 설정을 매번 구체적으로 안내받기로 함)
+4. **브라우저 개발자도구 Network 탭 확인** — 프론트 연동까지 끝난 뒤, 실제 요청/응답 페이로드를 열어서 프론트가 보내는 값과 백엔드가 기대하는 값이 맞는지 확인
 
 ## 5. 현재 백엔드 패키지 구조 (실제 구현됨, 검증 완료)
 
