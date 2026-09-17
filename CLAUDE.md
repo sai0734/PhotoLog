@@ -73,10 +73,17 @@ EXIF는 서버 왕복 없이 **프론트엔드에서 `exifr`로 즉시 파싱**�
 ```
 com.backend
 ├── BackendApplication.java   (JPA는 @MapperScan 등 별도 스캔 설정 불필요)
+├── board/                     ← 게시판 기능 전용 (2026-09-18 착수)
+│   ├── domain/                   Board(@Entity, @Table(name="tbl_board"), BaseEntity 상속 — 단 BaseEntity가 @MappedSuperclass 미적용이라 regDate/modDate는 현재 비활성 상태, 13절 참고),
+│   │                              BoardImage(@Entity, @Table(name="tbl_board_image"), Board와 @ManyToOne/@OneToMany(mappedBy="board"))
+│   ├── dto/                      BoardDTO
+│   ├── repository/               BoardRepository — findKeyword(검색), findWithMember/findWithAllMember(@EntityGraph로 memberEmail 즉시 로딩, findById/findAll 대체용 — 8절 6번 참고)
+│   └── service/                  BoardService, BoardServiceImpl (insert/getBoard/getBoardList/modify/delete 5개 CRUD, Repository+Service 테스트 완료)
 ├── global/                    ← 여러 기능이 공유하는 것
 │   ├── config/                   CustomSecurityConfig, CustomServletConfig, RootConfig
 │   ├── controller/advice/        CustomControllerAdvice
 │   ├── controller/formatter/     LocalDateFormatter
+│   ├── domain/                    BaseEntity (regDate/modDate — 2026-09-18 기준 @MappedSuperclass·@EntityListeners·@EnableJpaAuditing 미적용, 의도적으로 보류 — 13절 참고)
 │   ├── dto/                      PageRequestDTO, PageResponseDTO
 │   └── util/                     CustomFileUtil
 ├── member/                    ← 회원 기능 전용
@@ -108,11 +115,12 @@ com.backend
 - 스트레치: 이메일 인증, 소셜 로그인, 관리자 페이지 회원관리
 - 로그인/로그아웃/정보수정 흐름 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (단, `ModifyComponent` 비번 덮어쓰기 버그 있음 — 14절)
 
-### ② 자유게시판 (MVP) — 다음 작업 대상, 미착수
+### ② 자유게시판 (MVP) — 🔧 백엔드 도메인~서비스 완료, Controller/프론트 미착수 (2026-09-18)
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
-- 댓글·대댓글은 2단계로 제한 (대댓글에는 답글 불가)
-- 다중 이미지: `<input type="file" multiple>`로 동작 먼저 완성 → JPA `@OneToMany`(`BoardImage` 엔티티) cascade로 `board_image` 테이블에 일괄 저장 (정확한 매핑 전략은 게시판 착수 시 결정)
-- 게시글 삭제 시 연관 이미지 파일·댓글도 함께 정리 (JPA cascade + `orphanRemoval` 또는 애플리케이션 레벨)
+- 댓글·대댓글은 2단계로 제한 (대댓글에는 답글 불가) — **아직 미착수**
+- **실제 구현 현황**: `Board`/`BoardImage` 엔티티(`@ManyToOne`/`@OneToMany(mappedBy="board")` 관계), `BoardRepository`(검색·페이징·즉시로딩 쿼리), `BoardService`/`BoardServiceImpl`(등록/단건조회/목록조회/수정/삭제 5개) 완료 + Repository·Service 테스트 통과. **Controller·Postman 검증·프론트는 아직 시작 안 함**
+- 다중 이미지: `BoardImage` 엔티티로 분리 완료(계획대로). `Board.imageList`가 `@OneToMany(cascade=ALL, mappedBy="board")`로 연결, 삭제 시 cascade로 같이 지워짐 확인. 다만 "게시글은 유지, 사진 몇 장만 빼기"용 `orphanRemoval=true`는 아직 안 붙임 — 수정 기능 만들 때 추가
+- 게시글 삭제 시 연관 이미지 파일·댓글도 함께 정리 (JPA cascade — DB 행은 확인됨, 실제 업로드 파일 삭제는 Controller에서 `CustomFileUtil.deleteFiles()` 호출 필요, 아직 연결 안 함)
 - 스트레치: 카테고리 필터, 드래그앤드롭·클립보드 붙여넣기 업로드
 
 ### ③ 사진 갤러리 (MVP) — 미착수
@@ -150,6 +158,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 3. **MariaDB 계정 미생성**: `CREATE USER`/`CREATE DATABASE` SQL을 작성만 하고 실행을 안 해서, 앱 구동 시 존재하지 않는 계정으로 접속을 시도 → `GSS-API authentication exception` / `Unable to obtain Principal Name for authentication` 에러 발생. SQL을 실제로 실행해서 해결.
 4. **한글 경로로 인한 Gradle 빌드/테스트 오류**: 프로젝트가 `OneDrive\바탕 화면\PhotoLog`(한글 경로 + OneDrive 동기화 폴더)에 있어서, `./gradlew clean test`를 해도 `ClassNotFoundException`이 반복 발생(컴파일은 성공하는데 테스트 워커 JVM이 클래스를 못 찾음). 콘솔에 한글 경로가 깨져서 출력되는 것도 방증. `C:\Users\hjc13\sai\PhotoLog`(영문 경로)로 프로젝트를 이동해서 해결. **앞으로 한글·OneDrive 경로는 피할 것.**
 5. **JPA 전환 시 `Member` 테이블명 불일치**: `Member` 엔티티에 `@Table(name="tbl_member")`를 안 붙이면 Hibernate 기본 네이밍 전략상 `tbl_member`가 아니라 `member`라는 새 테이블을 찾음. `@Table(name="tbl_member")` 추가로 해결. 같은 이유로 `memberRoleList`(`@ElementCollection`)는 커스터마이징 안 하면 `member_member_role_list`라는 이름으로 자동 생성됨 — 참고한 JPA 스켈레톤(`back_JPA.zip`)도 동일하게 커스터마이징 없이 그대로 뒀으므로, PhotoLog도 동일하게 유지하기로 결정 (스키마를 `ddl-auto`로 완전히 넘겼으므로 옛 테이블명을 지킬 이유가 없음).
+6. **`LazyInitializationException` — Entity를 DTO로 변환할 때 LAZY 연관관계를 트랜잭션 밖에서 건드리면 터짐 (2026-09-18, 게시판 작업 중 발견, 가장 중요한 교훈)**: `Board.memberEmail`이 `fetch = FetchType.LAZY`인 상태에서 `BoardServiceImpl.getBoard()`가 `boardRepository.findById(...)` → `modelMapper.map(board, BoardDTO.class)`로 DTO를 만들면, `memberEmail`은 아직 초기화 안 된 proxy 상태로 그대로 DTO에 복사됨. `@Transactional` 메서드가 끝나 세션이 닫힌 뒤(예: 테스트에서 `log.info(boardDTO)`, 나중엔 Controller가 JSON으로 직렬화할 때) 그 proxy를 실제로 읽으려 하면 `LazyInitializationException: ... no session`이 터짐. **해결**: `Member`처럼(`MemberRepository.getWithRoles()` 참고) `BoardRepository`에 `@EntityGraph(attributePaths = "memberEmail")` + `@Query`로 즉시 로딩 전용 조회 메서드(`findWithMember`/`findWithAllMember`)를 만들어서, `memberEmail`을 실제로 참조하는 조회(`getBoard`, `getBoardList`)에서만 `findById`/`findAll` 대신 이걸 씀. `memberEmail`을 안 건드리는 `modify`/`delete`는 그냥 `findById` 그대로 둬도 안전(관계를 안 쳐다보니까 proxy 초기화 자체가 안 일어남). **일반화된 규칙**: Entity를 조회해서 DTO로 변환해 트랜잭션 밖으로 내보낼 때, LAZY 연관관계 중 DTO에 실제로 담을 것만 선택적으로 즉시 로딩 처리한다 — 전부 EAGER로 바꾸는 건 성능상 안티패턴이라 하지 않음. 갤러리·댓글 등 앞으로 만들 모든 연관관계에 동일하게 적용될 원칙.
 
 ## 9. 코드 리뷰에서 발견했지만 의도적으로 그대로 둔 것들
 
@@ -195,10 +204,13 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 1. **14절 코드 리뷰 지적사항 정리** — ✅ 완료 (아래 내용은 2026-09-15에 전부 해결됨, 14절 참고). 남은 건 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 자체와 CORS 참고 항목뿐
 2. Spring Security + JWT 코드 전체 리딩 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음
 3. **게시판(자유게시판) 기능 구현** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천. 지금은 JS(`.jsx`)로 작업 (TS 마이그레이션 아직 착수 전, 4번 참고)
+   - 🔧 **진행 중 (2026-09-18)**: `Board`/`BoardImage` 도메인 + `BoardRepository` + `BoardService`/`BoardServiceImpl` 완료, Repository·Service 테스트 통과 (5절 참고)
+   - **다음 순서**: `BoardController` 작성 → Postman으로 엔드포인트 직접 호출 검증(4절 API 검증 절차 3번) → 프론트 `.jsx` 연동 → Network 탭 확인(4절 4번) → 그 다음에 댓글·대댓글, 다중이미지 업로드 UI
+   - `global/domain/BaseEntity`의 `@MappedSuperclass`/`@EntityListeners`/`@EnableJpaAuditing` 적용은 **의도적으로 보류 중** — 지금 당장 필요하진 않으나, 게시글 등록일/수정일 표시가 필요해지면 그때 처리
 4. **회원 기능 마무리** — 회원가입, 아이디 중복확인, 프로필사진 업로드, 회원탈퇴(소프트 삭제) — 14절 🔴 항목
 5. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정) — **회원 기능까지 다 끝난 뒤에 진행하기로 결정**
 
-참고: Member 엔티티는 지금 상태(스켈레톤 컨벤션, `@Column(nullable=false)` 없음) 유지로 확정. **게시판 엔티티(`Board`/`BoardImage`/`Comment`)부터는 `@Column(nullable=false)` 등 not-null 제약을 새로 적용하기로 결정** (Member엔 소급 적용 안 함).
+참고: Member 엔티티는 지금 상태(스켈레톤 컨벤션, `@Column(nullable=false)` 없음) 유지로 확정. **게시판 엔티티(`Board`/`BoardImage`/`Comment`)부터는 `@Column(nullable=false)` 등 not-null 제약을 새로 적용하기로 결정** (Member엔 소급 적용 안 함, 단 2026-09-18 기준 아직 `Board`/`BoardImage`에도 미적용 — 실제로 걸지는 추후 판단).
 
 ## 14. 코드 리뷰 지적사항 (2026-09-09, 미해결 — 개발 원칙상 본인이 직접 수정)
 
