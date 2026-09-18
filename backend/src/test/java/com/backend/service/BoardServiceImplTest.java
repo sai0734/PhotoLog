@@ -48,12 +48,12 @@ public class BoardServiceImplTest {
         for(int i = 0; i < 30; i++) {
 
             BoardDTO boardDTO = BoardDTO.builder()
-                    .memberEmail(member)
+                    .memberEmail(member.getEmail())
                     .title("테스트용제목" + i)
                     .contents("테스트용내용" + i)
                     .build();
 
-            boardService.insert(boardDTO);
+            boardService.insert(boardDTO, member.getEmail());
 
             log.info(boardDTO);
 
@@ -96,12 +96,12 @@ public class BoardServiceImplTest {
 
         BoardDTO boardDTO = BoardDTO.builder()
                 .boardNumber(3L)
-                .memberEmail(member)
+                .memberEmail(member.getEmail())
                 .title("수정용제목")
                 .contents("수정용내용")
                 .build();
 
-        boardService.modify(boardDTO);
+        boardService.modify(boardDTO, member.getEmail());
 
     }
 
@@ -110,7 +110,9 @@ public class BoardServiceImplTest {
 
         Long boardNumber = 5L;
 
-        boardService.delete(boardNumber);
+        Member member = memberRepository.findById("hjc135@naver.com").orElseThrow();
+
+        boardService.delete(boardNumber, member.getEmail());
 
     }
 

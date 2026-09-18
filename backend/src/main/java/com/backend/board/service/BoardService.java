@@ -13,13 +13,13 @@ public interface BoardService {
     BoardDTO getBoard(Long boardNumber);
 
     // 등록
-    void insert(BoardDTO boardDTO);
+    Long insert(BoardDTO boardDTO, String memberEmail);
 
     // 수정
-    void modify(BoardDTO boardDTO);
+    void modify(BoardDTO boardDTO, String memberEmail);
 
     // 삭제
-    void delete(Long boardNumber);
+    void delete(Long boardNumber, String memberEmail);
 
 
 }

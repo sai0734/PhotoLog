@@ -74,7 +74,7 @@ EXIF는 서버 왕복 없이 **프론트엔드에서 `exifr`로 즉시 파싱**�
 com.backend
 ├── BackendApplication.java   (JPA는 @MapperScan 등 별도 스캔 설정 불필요)
 ├── board/                     ← 게시판 기능 전용 (2026-09-18 착수)
-│   ├── domain/                   Board(@Entity, @Table(name="tbl_board"), BaseEntity 상속 — 단 BaseEntity가 @MappedSuperclass 미적용이라 regDate/modDate는 현재 비활성 상태, 13절 참고),
+│   ├── domain/                   Board(@Entity, @Table(name="tbl_board"), BaseEntity 상속 — regDate/modDate 자동 기록 정상 동작 확인(2026-09-18, 아래 BaseEntity 참고)),
 │   │                              BoardImage(@Entity, @Table(name="tbl_board_image"), Board와 @ManyToOne/@OneToMany(mappedBy="board"))
 │   ├── dto/                      BoardDTO
 │   ├── repository/               BoardRepository — findKeyword(검색), findWithMember/findWithAllMember(@EntityGraph로 memberEmail 즉시 로딩, findById/findAll 대체용 — 8절 6번 참고)
@@ -83,7 +83,7 @@ com.backend
 │   ├── config/                   CustomSecurityConfig, CustomServletConfig, RootConfig
 │   ├── controller/advice/        CustomControllerAdvice
 │   ├── controller/formatter/     LocalDateFormatter
-│   ├── domain/                    BaseEntity (regDate/modDate — 2026-09-18 기준 @MappedSuperclass·@EntityListeners·@EnableJpaAuditing 미적용, 의도적으로 보류 — 13절 참고)
+│   ├── domain/                    BaseEntity (regDate/modDate — 2026-09-18 완료: `@MappedSuperclass`+`@EntityListeners(AuditingEntityListener)`+`BackendApplication`의 `@EnableJpaAuditing`+`BaseEntity` 자체에 `@Getter` 4가지 다 적용, DB 직접 조회로 `regdate`/`moddate` 실제 타임스탬프 기록 확인 완료)
 │   ├── dto/                      PageRequestDTO, PageResponseDTO
 │   └── util/                     CustomFileUtil
 ├── member/                    ← 회원 기능 전용
@@ -115,12 +115,17 @@ com.backend
 - 스트레치: 이메일 인증, 소셜 로그인, 관리자 페이지 회원관리
 - 로그인/로그아웃/정보수정 흐름 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (단, `ModifyComponent` 비번 덮어쓰기 버그 있음 — 14절)
 
-### ② 자유게시판 (MVP) — 🔧 백엔드 도메인~서비스 완료, Controller/프론트 미착수 (2026-09-18)
+### ② 자유게시판 (MVP) — 🔧 백엔드 CRUD Controller 완료, 이미지·댓글·프론트·Postman 검증 남음 (2026-09-18)
+- **`BoardController` CRUD 5개 완료**: `GET /api/board`(목록), `GET /api/board/{boardNumber}`(단건), `POST /api/board`(등록), `PUT /api/board/{boardNumber}`(수정), `DELETE /api/board/{boardNumber}`(삭제) — 컴파일·`contextLoads()` 통과 확인. 등록/수정/삭제는 `Principal.getName()`으로 작성자 이메일을 서버가 직접 채움(클라이언트가 못 정함), 전부 `@PreAuthorize("hasAnyRole('USER')")`로 로그인 필요. `insert()`는 `MemberRepository.findById(email)`로 실제 조회해서 `Board.builder()`로 직접 조립(`ModelMapper` 안 씀). `modify`/`delete`는 `findWithMember()`(즉시로딩)로 통일, 소유권 체크(`AccessDeniedException`) 포함
+- **남은 것 (2026-09-18 기준, 순서 무관하게 전부 미완료)**:
+  1. **다중 이미지 업로드/조회/삭제** — 오늘 밤 집 PC에서 이어서 할 것: `BoardImageRepository` 신규 → `BoardService.addImages`/`removeImage` 추가(`CustomFileUtil` 활용) → `BoardController`에 `POST /{boardNumber}/images`, `DELETE /{boardNumber}/images/{boardImageNumber}`, `GET /files/{fileName}`(파일 조회용, 빠뜨리기 쉬움) 3개 엔드포인트 추가
+  2. **게시글 전체 삭제 시 실제 이미지 파일 정리** — 지금 `delete()`는 JPA cascade로 `BoardImage` DB 행만 지움, 디스크의 실제 파일은 안 지워짐. 이미지 기능 만든 뒤 `delete()`에 `customFileUtil.deleteFiles(...)` 호출 추가 필요
+  3. **댓글·대댓글(2단계 제한)** — 완전히 미착수, `Comment` 엔티티부터 새로 설계해야 함
+  4. **프론트엔드(.jsx)** — 게시판 화면 자체가 하나도 없음 (리스트/상세/등록/수정 페이지 전부 미착수)
+  5. **Postman 실제 검증** — 컴파일·컨텍스트 로딩 확인만 했고, 실제 HTTP 요청으로 5개 엔드포인트를 호출해본 적은 아직 없음 (4절 API 검증 절차 3번)
+  6. (선택) `BoardRepositoryTest`/`BoardServiceImplTest`에 `@Transactional` 추가 — 하드코딩 ID가 테스트 반복 실행마다 어긋나는 문제, 당장 급하지 않아 보류 중
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
-- 댓글·대댓글은 2단계로 제한 (대댓글에는 답글 불가) — **아직 미착수**
-- **실제 구현 현황**: `Board`/`BoardImage` 엔티티(`@ManyToOne`/`@OneToMany(mappedBy="board")` 관계), `BoardRepository`(검색·페이징·즉시로딩 쿼리), `BoardService`/`BoardServiceImpl`(등록/단건조회/목록조회/수정/삭제 5개) 완료 + Repository·Service 테스트 통과. **Controller·Postman 검증·프론트는 아직 시작 안 함**
-- 다중 이미지: `BoardImage` 엔티티로 분리 완료(계획대로). `Board.imageList`가 `@OneToMany(cascade=ALL, mappedBy="board")`로 연결, 삭제 시 cascade로 같이 지워짐 확인. 다만 "게시글은 유지, 사진 몇 장만 빼기"용 `orphanRemoval=true`는 아직 안 붙임 — 수정 기능 만들 때 추가
-- 게시글 삭제 시 연관 이미지 파일·댓글도 함께 정리 (JPA cascade — DB 행은 확인됨, 실제 업로드 파일 삭제는 Controller에서 `CustomFileUtil.deleteFiles()` 호출 필요, 아직 연결 안 함)
+- **다중 이미지 처리 방식 (2026-09-18 결정)**: 참고한 `baby_project`(`CommunityPost`)처럼, 게시글 본문 수정(`PUT /api/board/{id}`)과 이미지 추가/삭제를 **별도 엔드포인트로 분리**하기로 결정. `modify()`는 `title`/`contents`만 다루고 이미지는 안 건드림. `BoardDTO.imageUrl`(`List<String>`)과 `Board.imageUrl`(`List<BoardImage>`) 타입이 달라 `ModelMapper`가 자동 변환 못 하므로, 이미지 추가 로직은 `stream().map()`으로 직접 `BoardImage` 리스트를 만들어야 함(`baby_project`의 `CommunityPostServiceImpl.addImages()`/`toDTO()` 참고). 이미지 삭제 식별자는 `baby_project`(fileName 문자열)와 다르게, `BoardImage`가 이미 자체 PK(`boardImageNumber`)가 있으므로 **그걸로 식별하기로 결정**
 - 스트레치: 카테고리 필터, 드래그앤드롭·클립보드 붙여넣기 업로드
 
 ### ③ 사진 갤러리 (MVP) — 미착수
@@ -204,9 +209,12 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 1. **14절 코드 리뷰 지적사항 정리** — ✅ 완료 (아래 내용은 2026-09-15에 전부 해결됨, 14절 참고). 남은 건 회원 기능(회원가입·중복확인·프로필사진·탈퇴) 자체와 CORS 참고 항목뿐
 2. Spring Security + JWT 코드 전체 리딩 — `CustomSecurityConfig` → `JWTUtil` → 로그인 성공/실패 핸들러 → `JWTCheckFilter` → `CustomUserDetailsService` 순서로 함께 훑어보기로 예정되어 있었음
 3. **게시판(자유게시판) 기능 구현** — 리스트(페이징) → 상세 → 등록 → 수정 순서 추천. 지금은 JS(`.jsx`)로 작업 (TS 마이그레이션 아직 착수 전, 4번 참고)
-   - 🔧 **진행 중 (2026-09-18)**: `Board`/`BoardImage` 도메인 + `BoardRepository` + `BoardService`/`BoardServiceImpl` 완료, Repository·Service 테스트 통과 (5절 참고)
+   - 🔧 **진행 중 (2026-09-18)**: `Board`/`BoardImage` 도메인 + `BoardRepository` + `BoardService`/`BoardServiceImpl` 완료 (5절 참고)
+   - ⚠️ **테스트 재확인 필요 (2026-09-18)**: `./gradlew test`로 직접 재실행해보니 10개 중 `BoardRepositoryTest.delete()` 1개 실패(`NoSuchElementException`, `findById(1L)` 없음). 원인은 코드 버그가 아니라 **테스트가 `@Transactional` 롤백 없이 실제 로컬 DB에 커밋되는 구조라서, 같은 테스트 클래스를 반복 실행하면 auto-increment ID가 계속 밀려 하드코딩된 `1L`/`2L`/`3L`/`5L` 조회가 깨짐** — 다른 값으로 재시도하면 통과함. 이후 Repository/Service 테스트를 작성할 때 이 패턴(하드코딩 ID + 비격리 테스트)을 반복하면 계속 이런 식으로 헷갈릴 수 있음 — 여유 될 때 `@Transactional` 붙여서 테스트마다 롤백되게 하는 것 고려
    - **다음 순서**: `BoardController` 작성 → Postman으로 엔드포인트 직접 호출 검증(4절 API 검증 절차 3번) → 프론트 `.jsx` 연동 → Network 탭 확인(4절 4번) → 그 다음에 댓글·대댓글, 다중이미지 업로드 UI
-   - `global/domain/BaseEntity`의 `@MappedSuperclass`/`@EntityListeners`/`@EnableJpaAuditing` 적용은 **의도적으로 보류 중** — 지금 당장 필요하진 않으나, 게시글 등록일/수정일 표시가 필요해지면 그때 처리
+   - ✅ **`global/domain/BaseEntity` 등록일/수정일 자동 기록 — 2026-09-18 완료**: `BackendApplication`에 `@EnableJpaAuditing` 추가 + `BaseEntity`에 `@Getter` 추가로 마무리. DB 직접 조회(`select board_number, regdate, moddate from tbl_board`)로 실제 타임스탬프 채워지는 것까지 확인함
+   - ✅ **설계 결정 완료 (2026-09-18), 코드 반영은 진행 중** — `BoardDTO.memberEmail`을 `Member`가 아닌 `String`으로 변경 완료(테스트 코드도 맞춰 수정), `BoardService.modify`/`delete`에 `memberEmail` 파라미터 추가 + `AccessDeniedException`(반드시 `org.springframework.security.access` 패키지 것 사용 — `java.nio.file` 것 아님, 실수로 잘못 import하기 쉬움)으로 소유권 체크 완료. **아직 안 한 것**: `BoardController`에서 `Principal.getName()`으로 `memberEmail` 채우기, `insert()`를 `ModelMapper` 대신 `MemberRepository.findById()`로 직접 조회해 조립하는 방식으로 변경(2절 참고)
+   - **다중 이미지 처리 결정 완료 (2026-09-18)**: `baby_project`(`CommunityPost`) 패턴을 참고해 게시글 수정과 이미지 추가/삭제를 별도 엔드포인트로 분리하기로 함 — 자세한 내용은 6절 ② 참고. 아직 미구현
 4. **회원 기능 마무리** — 회원가입, 아이디 중복확인, 프로필사진 업로드, 회원탈퇴(소프트 삭제) — 14절 🔴 항목
 5. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정) — **회원 기능까지 다 끝난 뒤에 진행하기로 결정**
 

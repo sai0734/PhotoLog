@@ -3,6 +3,8 @@ package com.backend.board.service;
 import com.backend.board.domain.Board;
 import com.backend.board.dto.BoardDTO;
 import com.backend.board.repository.BoardRepository;
+import com.backend.member.domain.Member;
+import com.backend.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.modelmapper.ModelMapper;
@@ -10,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +25,8 @@ import java.util.NoSuchElementException;
 public class BoardServiceImpl implements BoardService{
 
     private final BoardRepository boardRepository;
+
+    private final MemberRepository memberRepository;
 
     private final ModelMapper modelMapper;
 
@@ -53,37 +58,59 @@ public class BoardServiceImpl implements BoardService{
     }
 
     @Override
-    public void insert(BoardDTO boardDTO) {
+    public Long insert(BoardDTO boardDTO, String memberEmail) {
 
         log.info("BoardServiceImpl_insert_gogo.....");
 
-        Board board = modelMapper.map(boardDTO, Board.class);
+//        Board board = modelMapper.map(boardDTO, Board.class);
 
-        boardRepository.save(board);
+        Member member = memberRepository.findById(memberEmail).orElseThrow();
+
+        Board board = Board.builder()
+                .memberEmail(member)
+                .title(boardDTO.getTitle())
+                .contents(boardDTO.getContents())
+                .build();
+
+        Board result = boardRepository.save(board);
+
+        return result.getBoardNumber();
 
     }
 
     @Override
-    public void modify(BoardDTO boardDTO) {
+    public void modify(BoardDTO boardDTO, String memberEmail) {
 
         log.info("BoardServiceImpl_modify_gogo.....");
 
-        Board board = boardRepository.findById(boardDTO.getBoardNumber()).orElseThrow(() -> new NoSuchElementException("해당 게시글이 존재하지 않습니다."));
+        Board board = boardRepository.findWithMember(boardDTO.getBoardNumber()).orElseThrow(() -> new NoSuchElementException("해당 게시글이 존재하지 않습니다."));
 
-        board.change(boardDTO.getTitle(), boardDTO.getContents());
+        if(board.getMemberEmail().getEmail().equals(memberEmail)) {
 
-        boardRepository.save(board);
+            board.change(boardDTO.getTitle(), boardDTO.getContents());
+
+            boardRepository.save(board);
+
+        } else {
+            throw new AccessDeniedException("나의 글이 아닙니다.");
+        }
 
     }
 
     @Override
-    public void delete(Long boardNumber) {
+    public void delete(Long boardNumber, String memberEmail) {
 
         log.info("BoardServiceImpl_delete_gogo.....");
 
-        Board board = boardRepository.findById(boardNumber).orElseThrow(() -> new NoSuchElementException("해당 게시글이 존재하지 않습니다."));
+        Board board = boardRepository.findWithMember(boardNumber).orElseThrow(() -> new NoSuchElementException("해당 게시글이 존재하지 않습니다."));
 
-        boardRepository.delete(board);
+        if(board.getMemberEmail().getEmail().equals(memberEmail)) {
+
+            boardRepository.delete(board);
+
+        } else {
+            throw new AccessDeniedException("나의 글이 아닙니다.");
+        }
 
     }
 }
