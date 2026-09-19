@@ -13,7 +13,7 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString(exclude = {"memberEmail", "imageUrl"})
+@ToString(exclude = {"memberEmail", "imageList"})
 @Table(name = "tbl_board")
 public class Board extends BaseEntity {
 
@@ -29,7 +29,7 @@ public class Board extends BaseEntity {
 
     // 일대다관계 -> cascade는 board삭제 시 해당 필드 같이 삭제, mappedBy는 외래키(FK)를 가지고 있는 녀석
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "boardNumber")
-    private List<BoardImage> imageUrl;
+    private List<BoardImage> imageList;
 
     @Column(name = "title", length = 500, nullable = false)
     private String title;

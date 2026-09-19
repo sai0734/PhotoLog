@@ -48,7 +48,7 @@ public class CustomFileUtil {
   public List<String> saveFiles(List<MultipartFile> files)throws RuntimeException{
 
     if(files == null || files.size() == 0){
-       return null; //List.of(); 
+       return null;
     }
 
     List<String> uploadNames = new ArrayList<>();
@@ -75,7 +75,7 @@ public class CustomFileUtil {
       } catch (IOException e) {
         throw new RuntimeException(e.getMessage());
       }
-    }//end for
+    }
     return uploadNames;
   }
 

@@ -74,11 +74,11 @@ EXIF는 서버 왕복 없이 **프론트엔드에서 `exifr`로 즉시 파싱**�
 com.backend
 ├── BackendApplication.java   (JPA는 @MapperScan 등 별도 스캔 설정 불필요)
 ├── board/                     ← 게시판 기능 전용 (2026-09-18 착수)
-│   ├── domain/                   Board(@Entity, @Table(name="tbl_board"), BaseEntity 상속 — regDate/modDate 자동 기록 정상 동작 확인(2026-09-18, 아래 BaseEntity 참고)),
-│   │                              BoardImage(@Entity, @Table(name="tbl_board_image"), Board와 @ManyToOne/@OneToMany(mappedBy="board"))
-│   ├── dto/                      BoardDTO
-│   ├── repository/               BoardRepository — findKeyword(검색), findWithMember/findWithAllMember(@EntityGraph로 memberEmail 즉시 로딩, findById/findAll 대체용 — 8절 6번 참고)
-│   └── service/                  BoardService, BoardServiceImpl (insert/getBoard/getBoardList/modify/delete 5개 CRUD, Repository+Service 테스트 완료)
+│   ├── domain/                   Board(@Entity, @Table(name="tbl_board"), BaseEntity 상속 — regDate/modDate 자동 기록 정상 동작 확인(2026-09-18, 아래 BaseEntity 참고), 필드명 imageList로 통일(2026-09-19, ModelMapper 자동매핑용 — 8절 7번 참고)),
+│   │                              BoardImage(@Entity, @Table(name="tbl_board_image"), 필드명 boardNumber·타입 Board로 Board와 @ManyToOne/@OneToMany(mappedBy="boardNumber") 연결)
+│   ├── dto/                      BoardDTO(imageList: List<BoardImageDTO> — 조회용, keepImageNumbers: List<Long> + files: List<MultipartFile> — 수정 시 배치교체용, 8절 7번 참고), BoardImageDTO(신규, 2026-09-19)
+│   ├── repository/               BoardRepository — findKeyword(검색), findWithMember/findWithAllMember(@EntityGraph로 memberEmail 즉시 로딩, findById/findAll 대체용 — 8절 6번 참고), BoardImageRepository(신규, 2026-09-19, 기본 CRUD만)
+│   └── service/                  BoardService, BoardServiceImpl (insert/getBoard/getBoardList/modify/delete 5개 CRUD, Repository+Service 테스트 완료. insert()는 다중 이미지 업로드까지 실제 구현·검증 완료(2026-09-19), modify()는 아직 title/contents만 처리 — 6절 ② 참고)
 ├── global/                    ← 여러 기능이 공유하는 것
 │   ├── config/                   CustomSecurityConfig, CustomServletConfig, RootConfig
 │   ├── controller/advice/        CustomControllerAdvice
@@ -115,17 +115,23 @@ com.backend
 - 스트레치: 이메일 인증, 소셜 로그인, 관리자 페이지 회원관리
 - 로그인/로그아웃/정보수정 흐름 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (단, `ModifyComponent` 비번 덮어쓰기 버그 있음 — 14절)
 
-### ② 자유게시판 (MVP) — 🔧 백엔드 CRUD Controller 완료, 이미지·댓글·프론트·Postman 검증 남음 (2026-09-18)
-- **`BoardController` CRUD 5개 완료**: `GET /api/board`(목록), `GET /api/board/{boardNumber}`(단건), `POST /api/board`(등록), `PUT /api/board/{boardNumber}`(수정), `DELETE /api/board/{boardNumber}`(삭제) — 컴파일·`contextLoads()` 통과 확인. 등록/수정/삭제는 `Principal.getName()`으로 작성자 이메일을 서버가 직접 채움(클라이언트가 못 정함), 전부 `@PreAuthorize("hasAnyRole('USER')")`로 로그인 필요. `insert()`는 `MemberRepository.findById(email)`로 실제 조회해서 `Board.builder()`로 직접 조립(`ModelMapper` 안 씀). `modify`/`delete`는 `findWithMember()`(즉시로딩)로 통일, 소유권 체크(`AccessDeniedException`) 포함
-- **남은 것 (2026-09-18 기준, 순서 무관하게 전부 미완료)**:
-  1. **다중 이미지 업로드/조회/삭제** — 오늘 밤 집 PC에서 이어서 할 것: `BoardImageRepository` 신규 → `BoardService.addImages`/`removeImage` 추가(`CustomFileUtil` 활용) → `BoardController`에 `POST /{boardNumber}/images`, `DELETE /{boardNumber}/images/{boardImageNumber}`, `GET /files/{fileName}`(파일 조회용, 빠뜨리기 쉬움) 3개 엔드포인트 추가
-  2. **게시글 전체 삭제 시 실제 이미지 파일 정리** — 지금 `delete()`는 JPA cascade로 `BoardImage` DB 행만 지움, 디스크의 실제 파일은 안 지워짐. 이미지 기능 만든 뒤 `delete()`에 `customFileUtil.deleteFiles(...)` 호출 추가 필요
-  3. **댓글·대댓글(2단계 제한)** — 완전히 미착수, `Comment` 엔티티부터 새로 설계해야 함
-  4. **프론트엔드(.jsx)** — 게시판 화면 자체가 하나도 없음 (리스트/상세/등록/수정 페이지 전부 미착수)
-  5. **Postman 실제 검증** — 컴파일·컨텍스트 로딩 확인만 했고, 실제 HTTP 요청으로 5개 엔드포인트를 호출해본 적은 아직 없음 (4절 API 검증 절차 3번)
-  6. (선택) `BoardRepositoryTest`/`BoardServiceImplTest`에 `@Transactional` 추가 — 하드코딩 ID가 테스트 반복 실행마다 어긋나는 문제, 당장 급하지 않아 보류 중
+### ② 자유게시판 (MVP) — 🔧 백엔드 insert() 이미지 업로드까지 완료, Controller 멀티파트 연동·modify 이미지처리·댓글·프론트·Postman 검증 남음 (2026-09-19 갱신)
+- **`BoardController` CRUD 5개 존재**: `GET /api/board`(목록), `GET /api/board/{boardNumber}`(단건), `POST /api/board`(등록), `PUT /api/board/{boardNumber}`(수정), `DELETE /api/board/{boardNumber}`(삭제) — 컴파일·`contextLoads()` 통과 확인. 등록/수정/삭제는 `Principal.getName()`으로 작성자 이메일을 서버가 직접 채움(클라이언트가 못 정함), 전부 `@PreAuthorize("hasAnyRole('USER')")`로 로그인 필요. **주의**: `register`/`modify`가 아직 `@RequestBody`(JSON)만 받고 있어서, `BoardDTO.files`(`List<MultipartFile>`)는 Controller를 통해서는 채워지지 않음 — 지금까지의 이미지 업로드 검증은 Service 계층 테스트에서 `MockMultipartFile`을 직접 넣어 확인한 것이고, **실제 브라우저에서 멀티파트로 보낼 때 Controller가 받게 하는 작업은 아직 안 함** (내일 저녁 작업 대상)
+- **`BoardServiceImpl` 현황 (2026-09-19)**:
+  - `insert()` — `MemberRepository.findById(email)`로 실제 조회해서 `Board.builder()`로 직접 조립(`ModelMapper` 안 씀), 이후 `boardDTO.getFiles()`가 있으면 `CustomFileUtil.saveFiles()` → 반환된 파일명들로 `BoardImage`를 만들어 `BoardImageRepository.save()` — **다중 이미지 업로드까지 실제 구현 및 end-to-end 검증 완료**
+  - `getBoard()`/`getBoardList()` — `ModelMapper` 안 쓰고 `BoardDTO.builder()` + `imageList.stream().map()`으로 수동 변환 (8절 7번 ModelMapper 버그 참고), `memberEmail`은 `findWithMember`/`findWithAllMember`로 즉시 로딩
+  - `modify()` — 소유권 체크(`AccessDeniedException`) 포함해서 `title`/`contents`만 변경. **`keepImageNumbers`/`files` 이미지 처리 로직은 아직 없음** (다음 작업)
+  - `delete()` — 소유권 체크 후 `boardRepository.delete(board)`만 호출. JPA cascade로 `BoardImage` DB 행은 지워지지만, **디스크의 실제 파일은 안 지워짐**(`customFileUtil.deleteFiles()` 호출 없음)
+- **남은 것 (2026-09-19 기준, 순서 무관하게 전부 미완료)**:
+  1. **`BoardController`가 실제 멀티파트를 받도록 수정** — `register`/`modify`를 `@RequestBody` 대신 `@ModelAttribute` 등으로 바꿔 `title`/`contents`/`files`(+`modify`는 `keepImageNumbers`)를 함께 받게 해야 함
+  2. **`modify()`에 이미지 배치교체 로직 추가** — `keepImageNumbers`에 없는 기존 `BoardImage`는 DB+디스크 삭제, `files`로 들어온 새 파일은 `insert()`처럼 저장 후 추가
+  3. **`delete()`에 디스크 파일 정리 추가** — `customFileUtil.deleteFiles(...)` 호출 필요
+  4. **댓글·대댓글(2단계 제한)** — 완전히 미착수, `Comment` 엔티티부터 새로 설계해야 함
+  5. **프론트엔드(.jsx)** — 게시판 화면 자체가 하나도 없음 (리스트/상세/등록/수정 페이지 전부 미착수) — 일요일 착수 예정
+  6. **Postman 실제 검증** — 컴파일·컨텍스트 로딩 확인만 했고, 실제 HTTP 요청으로 5개 엔드포인트를 호출해본 적은 아직 없음 (4절 API 검증 절차 3번)
+  7. (선택) `BoardRepositoryTest`/`BoardServiceImplTest`에 `@Transactional` 추가 — 하드코딩 ID가 테스트 반복 실행마다 어긋나는 문제, 당장 급하지 않아 보류 중
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
-- **다중 이미지 처리 방식 (2026-09-18 결정)**: 참고한 `baby_project`(`CommunityPost`)처럼, 게시글 본문 수정(`PUT /api/board/{id}`)과 이미지 추가/삭제를 **별도 엔드포인트로 분리**하기로 결정. `modify()`는 `title`/`contents`만 다루고 이미지는 안 건드림. `BoardDTO.imageUrl`(`List<String>`)과 `Board.imageUrl`(`List<BoardImage>`) 타입이 달라 `ModelMapper`가 자동 변환 못 하므로, 이미지 추가 로직은 `stream().map()`으로 직접 `BoardImage` 리스트를 만들어야 함(`baby_project`의 `CommunityPostServiceImpl.addImages()`/`toDTO()` 참고). 이미지 삭제 식별자는 `baby_project`(fileName 문자열)와 다르게, `BoardImage`가 이미 자체 PK(`boardImageNumber`)가 있으므로 **그걸로 식별하기로 결정**
+- **다중 이미지 처리 방식 (2026-09-19 최종 확정, 2026-09-18의 "별도 엔드포인트 분리" 결정을 대체함)**: 이미지 추가/삭제용 별도 엔드포인트(`POST/DELETE .../images`)를 만들지 않고, 수정 페이지에서 X로 이미지를 지웠다가 저장 버튼을 누르는 시점에 **한 번에 배치 처리**하기로 변경. `BoardDTO`에 `keepImageNumbers`(유지할 `boardImageNumber` 목록)와 `files`(새로 추가할 파일)를 함께 담아 `PUT /api/board/{boardNumber}` 한 번으로 전송 — `modify()`가 "keep 목록에 없는 기존 이미지는 삭제 + files는 추가"를 한 트랜잭션에서 처리. 이유: 즉시 삭제 API는 사용자가 "취소"를 누르면 이미 지운 이미지를 되돌릴 수 없어 UX상 맞지 않다고 판단
 - 스트레치: 카테고리 필터, 드래그앤드롭·클립보드 붙여넣기 업로드
 
 ### ③ 사진 갤러리 (MVP) — 미착수
@@ -164,6 +170,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 4. **한글 경로로 인한 Gradle 빌드/테스트 오류**: 프로젝트가 `OneDrive\바탕 화면\PhotoLog`(한글 경로 + OneDrive 동기화 폴더)에 있어서, `./gradlew clean test`를 해도 `ClassNotFoundException`이 반복 발생(컴파일은 성공하는데 테스트 워커 JVM이 클래스를 못 찾음). 콘솔에 한글 경로가 깨져서 출력되는 것도 방증. `C:\Users\hjc13\sai\PhotoLog`(영문 경로)로 프로젝트를 이동해서 해결. **앞으로 한글·OneDrive 경로는 피할 것.**
 5. **JPA 전환 시 `Member` 테이블명 불일치**: `Member` 엔티티에 `@Table(name="tbl_member")`를 안 붙이면 Hibernate 기본 네이밍 전략상 `tbl_member`가 아니라 `member`라는 새 테이블을 찾음. `@Table(name="tbl_member")` 추가로 해결. 같은 이유로 `memberRoleList`(`@ElementCollection`)는 커스터마이징 안 하면 `member_member_role_list`라는 이름으로 자동 생성됨 — 참고한 JPA 스켈레톤(`back_JPA.zip`)도 동일하게 커스터마이징 없이 그대로 뒀으므로, PhotoLog도 동일하게 유지하기로 결정 (스키마를 `ddl-auto`로 완전히 넘겼으므로 옛 테이블명을 지킬 이유가 없음).
 6. **`LazyInitializationException` — Entity를 DTO로 변환할 때 LAZY 연관관계를 트랜잭션 밖에서 건드리면 터짐 (2026-09-18, 게시판 작업 중 발견, 가장 중요한 교훈)**: `Board.memberEmail`이 `fetch = FetchType.LAZY`인 상태에서 `BoardServiceImpl.getBoard()`가 `boardRepository.findById(...)` → `modelMapper.map(board, BoardDTO.class)`로 DTO를 만들면, `memberEmail`은 아직 초기화 안 된 proxy 상태로 그대로 DTO에 복사됨. `@Transactional` 메서드가 끝나 세션이 닫힌 뒤(예: 테스트에서 `log.info(boardDTO)`, 나중엔 Controller가 JSON으로 직렬화할 때) 그 proxy를 실제로 읽으려 하면 `LazyInitializationException: ... no session`이 터짐. **해결**: `Member`처럼(`MemberRepository.getWithRoles()` 참고) `BoardRepository`에 `@EntityGraph(attributePaths = "memberEmail")` + `@Query`로 즉시 로딩 전용 조회 메서드(`findWithMember`/`findWithAllMember`)를 만들어서, `memberEmail`을 실제로 참조하는 조회(`getBoard`, `getBoardList`)에서만 `findById`/`findAll` 대신 이걸 씀. `memberEmail`을 안 건드리는 `modify`/`delete`는 그냥 `findById` 그대로 둬도 안전(관계를 안 쳐다보니까 proxy 초기화 자체가 안 일어남). **일반화된 규칙**: Entity를 조회해서 DTO로 변환해 트랜잭션 밖으로 내보낼 때, LAZY 연관관계 중 DTO에 실제로 담을 것만 선택적으로 즉시 로딩 처리한다 — 전부 EAGER로 바꾸는 건 성능상 안티패턴이라 하지 않음. 갤러리·댓글 등 앞으로 만들 모든 연관관계에 동일하게 적용될 원칙.
+7. **`ModelMapper` 매칭 모호성 — 한 DTO에 타입이 비슷한 리스트 필드가 여러 개 있으면 자동매핑이 엉뚱한 조합을 골라 크래시 (2026-09-19, 게시판 이미지 기능 중 발견)**: `BoardDTO`에 `imageList`(`List<BoardImageDTO>`, 조회용)와 `keepImageNumbers`(`List<Long>`, 수정 시 유지할 이미지 식별자)가 같이 있는 상태에서 `modelMapper.map(board, BoardDTO.class)`를 호출하면, `ModelMapper`가 `Board.imageList`(`List<BoardImage>`)를 `BoardDTO`의 어느 리스트 필드에 매칭할지 애매해져서(둘 다 "리스트"라는 것만 보고 후보로 삼음) `BoardImage`→`Long` 변환을 시도하다 크래시 발생. 참고로 `Board.imageList`↔`BoardDTO.imageList`처럼 **필드명이 정확히 같고 다른 리스트 필드가 없을 때는** `ModelMapper`가 컨테이너·원소 타입을 재귀적으로 알아서 변환해줌(원소 타입이 달라도 이름이 같으면 자동 매핑됨, 이건 실제로 확인됨). **해결**: `getBoard()`/`getBoardList()`에서는 `modelMapper.map()` 호출을 걷어내고 `BoardDTO.builder()` + `imageList.stream().map(...).toList()`로 직접 수동 변환. `insert()`도 `String`(`BoardDTO.memberEmail`) → `Member`(Entity) 방향 변환이 위험해서(존재하지 않는 회원으로 새 Entity를 만들려는 시도, `TransientPropertyValueException` 위험) 처음부터 `ModelMapper` 대신 `MemberRepository.findById()` + `Board.builder()`로 직접 조립. **일반화된 규칙**: `ModelMapper`는 "필드명이 정확히 일치하고, 그 타입과 매칭될 수 있는 후보가 하나뿐일 때"만 믿을 수 있다 — 조회용/쓰기용 필드가 한 DTO에 혼재하거나 비슷한 타입의 필드가 여럴 있으면 수동 변환이 더 안전함. DTO 분리로 이 모호성 자체를 없애는 방법도 있었지만, 본인이 "DTO를 하나 더 만드는 게 더 아닌 것 같다"고 판단해 DTO는 하나로 유지하고 변환 코드를 수동으로 쓰는 쪽을 선택함.
 
 ## 9. 코드 리뷰에서 발견했지만 의도적으로 그대로 둔 것들
 
@@ -213,8 +220,12 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
    - ⚠️ **테스트 재확인 필요 (2026-09-18)**: `./gradlew test`로 직접 재실행해보니 10개 중 `BoardRepositoryTest.delete()` 1개 실패(`NoSuchElementException`, `findById(1L)` 없음). 원인은 코드 버그가 아니라 **테스트가 `@Transactional` 롤백 없이 실제 로컬 DB에 커밋되는 구조라서, 같은 테스트 클래스를 반복 실행하면 auto-increment ID가 계속 밀려 하드코딩된 `1L`/`2L`/`3L`/`5L` 조회가 깨짐** — 다른 값으로 재시도하면 통과함. 이후 Repository/Service 테스트를 작성할 때 이 패턴(하드코딩 ID + 비격리 테스트)을 반복하면 계속 이런 식으로 헷갈릴 수 있음 — 여유 될 때 `@Transactional` 붙여서 테스트마다 롤백되게 하는 것 고려
    - **다음 순서**: `BoardController` 작성 → Postman으로 엔드포인트 직접 호출 검증(4절 API 검증 절차 3번) → 프론트 `.jsx` 연동 → Network 탭 확인(4절 4번) → 그 다음에 댓글·대댓글, 다중이미지 업로드 UI
    - ✅ **`global/domain/BaseEntity` 등록일/수정일 자동 기록 — 2026-09-18 완료**: `BackendApplication`에 `@EnableJpaAuditing` 추가 + `BaseEntity`에 `@Getter` 추가로 마무리. DB 직접 조회(`select board_number, regdate, moddate from tbl_board`)로 실제 타임스탬프 채워지는 것까지 확인함
-   - ✅ **설계 결정 완료 (2026-09-18), 코드 반영은 진행 중** — `BoardDTO.memberEmail`을 `Member`가 아닌 `String`으로 변경 완료(테스트 코드도 맞춰 수정), `BoardService.modify`/`delete`에 `memberEmail` 파라미터 추가 + `AccessDeniedException`(반드시 `org.springframework.security.access` 패키지 것 사용 — `java.nio.file` 것 아님, 실수로 잘못 import하기 쉬움)으로 소유권 체크 완료. **아직 안 한 것**: `BoardController`에서 `Principal.getName()`으로 `memberEmail` 채우기, `insert()`를 `ModelMapper` 대신 `MemberRepository.findById()`로 직접 조회해 조립하는 방식으로 변경(2절 참고)
-   - **다중 이미지 처리 결정 완료 (2026-09-18)**: `baby_project`(`CommunityPost`) 패턴을 참고해 게시글 수정과 이미지 추가/삭제를 별도 엔드포인트로 분리하기로 함 — 자세한 내용은 6절 ② 참고. 아직 미구현
+   - ✅ **설계 결정 완료 (2026-09-18), 코드 반영도 완료** — `BoardDTO.memberEmail`을 `Member`가 아닌 `String`으로 변경(테스트 코드도 맞춰 수정), `BoardController`에서 `Principal.getName()`으로 `memberEmail` 채워서 `BoardService.modify`/`delete`에 전달, `insert()`는 `ModelMapper` 대신 `MemberRepository.findById()`로 직접 조회해 `Board.builder()`로 조립, `AccessDeniedException`(`org.springframework.security.access` 패키지)으로 소유권 체크까지 완료
+   - ✅ **다중 이미지 업로드(등록 시점) — 2026-09-19 완료**: `BoardImage` 도메인 + `BoardImageRepository` + `BoardImageDTO` 신규 생성. `BoardServiceImpl.insert()`가 `CustomFileUtil.saveFiles()`로 파일 저장 후 `BoardImage`를 만들어 `BoardImageRepository.save()`까지 실제 구현, 진짜 JPEG 바이트로 end-to-end 검증 완료. `getBoard()`/`getBoardList()`도 이미지 목록을 `BoardImageDTO` 리스트로 함께 반환하도록 완료
+   - ⚠️ **`ModelMapper` 매칭 모호성 버그 발견·해결 — 2026-09-19**: `BoardDTO`에 `imageList`/`keepImageNumbers`가 같이 있어서 `modelMapper.map()`이 크래시 — `getBoard()`/`getBoardList()`에서 수동 `builder()`로 우회. 자세한 내용은 8절 7번 참고
+   - **다중 이미지 처리 방식 — 2026-09-19 변경**: 2026-09-18에 정했던 "이미지 추가/삭제 별도 엔드포인트" 방식을 폐기하고, `keepImageNumbers`+`files`를 수정 시점에 한 번에 보내는 **배치교체** 방식으로 최종 확정 (6절 ② 참고)
+   - 🔧 **다음 작업 (2026-09-20 저녁 목표)**: `BoardController`의 `register`/`modify`가 아직 `@RequestBody`(JSON)만 받고 있어서 실제 멀티파트(`files`)를 못 받음 — `@ModelAttribute` 등으로 변경 필요. `modify()`에 `keepImageNumbers`/`files` 배치교체 로직 추가. `delete()`에 `customFileUtil.deleteFiles()` 호출 추가(현재 디스크 파일 안 지워짐). 그 다음 Postman으로 5개 엔드포인트 실제 호출 검증(4절 3번)
+   - 🔧 **그 다음 작업 (2026-09-21 일요일 목표)**: 게시판 프론트엔드(.jsx) 착수 — 리스트/상세/등록/수정 페이지
 4. **회원 기능 마무리** — 회원가입, 아이디 중복확인, 프로필사진 업로드, 회원탈퇴(소프트 삭제) — 14절 🔴 항목
 5. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정) — **회원 기능까지 다 끝난 뒤에 진행하기로 결정**
 

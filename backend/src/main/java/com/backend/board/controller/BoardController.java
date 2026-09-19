@@ -3,15 +3,16 @@ package com.backend.board.controller;
 import com.backend.board.dto.BoardDTO;
 import com.backend.board.service.BoardService;
 import com.backend.global.dto.PageRequestDTO;
-import com.backend.global.util.CustomFileUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -21,8 +22,6 @@ import java.util.Map;
 public class BoardController {
 
     private final BoardService boardService;
-
-    private final CustomFileUtil customFileUtil;
 
     @GetMapping("/")
     @PreAuthorize("hasAnyRole('USER')")
