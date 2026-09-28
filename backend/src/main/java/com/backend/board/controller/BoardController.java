@@ -3,16 +3,17 @@ package com.backend.board.controller;
 import com.backend.board.dto.BoardDTO;
 import com.backend.board.service.BoardService;
 import com.backend.global.dto.PageRequestDTO;
+import com.backend.global.util.CustomFileUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.security.Principal;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -22,6 +23,8 @@ import java.util.Map;
 public class BoardController {
 
     private final BoardService boardService;
+
+    private final CustomFileUtil customFileUtil;
 
     @GetMapping("/")
     @PreAuthorize("hasAnyRole('USER')")
@@ -52,9 +55,10 @@ public class BoardController {
 
     // URL에 값이 담겨오지 않고 HTTP의 body에 JSON형태로 담겨오기 때문에 @RequestBody 사용
     // boardNumber를 반환하는 이유는 프론트에서 등록 후 상세페이지로 바로 이동하려고 할 때 필요하니까
+    // 진행중에 이미지까지 처리하다보니 @RequestBody는 JSON밖에 못담아와서 @ModelAtribute 사용 -> 폼 형식 데이터를 받는 어노테이션
     @PostMapping("/")
     @PreAuthorize("hasAnyRole('USER')")
-    public Map<String, Long> register(@RequestBody BoardDTO boardDTO, Principal principal) {
+    public Map<String, Long> register(@ModelAttribute BoardDTO boardDTO, Principal principal) {
 
         log.info("BoardController_register_gogo.....");
 
@@ -68,7 +72,7 @@ public class BoardController {
 
     @PutMapping("/{boardNumber}")
     @PreAuthorize("hasAnyRole('USER')")
-    public Map<String, String> modify(@PathVariable Long boardNumber, @RequestBody BoardDTO boardDTO, Principal principal) {
+    public Map<String, String> modify(@PathVariable Long boardNumber, @ModelAttribute BoardDTO boardDTO, Principal principal) {
 
         log.info("BoardController_modify_gogo.....");
 
@@ -94,6 +98,14 @@ public class BoardController {
 
         return Map.of("result", "deleted");
 
+    }
+
+    @GetMapping("/files/{fileName}")
+    public ResponseEntity<Resource> getImage (@PathVariable String fileName) {
+
+        ResponseEntity<Resource> image = customFileUtil.getFile(fileName);
+
+        return image;
     }
 
 }

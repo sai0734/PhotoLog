@@ -1,6 +1,5 @@
 package com.backend.service;
 
-import com.backend.board.domain.Board;
 import com.backend.board.dto.BoardDTO;
 import com.backend.board.service.BoardService;
 import com.backend.member.domain.Member;

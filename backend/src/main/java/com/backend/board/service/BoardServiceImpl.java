@@ -19,7 +19,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -36,6 +35,7 @@ public class BoardServiceImpl implements BoardService{
 
     private final MemberRepository memberRepository;
 
+    // 처음에 썼다가 추후 이미지 처리가 들어와 안쓰게 됨
     private final ModelMapper modelMapper;
 
     private final CustomFileUtil customFileUtil;
@@ -132,6 +132,7 @@ public class BoardServiceImpl implements BoardService{
 
     }
 
+    // 가장 어려웠던 로직
     @Override
     public void modify(BoardDTO boardDTO, String memberEmail) {
 
@@ -144,6 +145,34 @@ public class BoardServiceImpl implements BoardService{
             board.change(boardDTO.getTitle(), boardDTO.getContents());
 
             boardRepository.save(board);
+
+            List<Long> keepImageNumbers = boardDTO.getKeepImageNumbers();
+
+            if(keepImageNumbers != null) {
+                // !keepImageNumbers.contains() 이게 바로 keep 목록에 없으면 -> 즉 삭제대상
+                List<BoardImage> imageToDelete = board.getImageList().stream().filter(boardImage -> !keepImageNumbers.contains(boardImage.getBoardImageNumber())).toList();
+
+                List<String> fileNames = imageToDelete.stream().map(boardImage -> boardImage.getImageUrl()).toList();
+
+                // 총 2군데에서 지워야한다 -> 1. upload경로, 2. BoardImage 객체
+                customFileUtil.deleteFiles(fileNames);
+
+                boardImageRepository.deleteAll(imageToDelete);
+
+            }
+
+            if(boardDTO.getFiles() != null && !boardDTO.getFiles().isEmpty()) {
+                List<String> fileNames = customFileUtil.saveFiles(boardDTO.getFiles());
+
+                for (String fileName : fileNames) {
+                    BoardImage boardImage = BoardImage.builder()
+                            .imageUrl(fileName)
+                            .boardNumber(board)
+                            .build();
+
+                    boardImageRepository.save(boardImage);
+                }
+            }
 
         } else {
             throw new AccessDeniedException("나의 글이 아닙니다.");
@@ -160,7 +189,11 @@ public class BoardServiceImpl implements BoardService{
 
         if(board.getMemberEmail().getEmail().equals(memberEmail)) {
 
+            List<String> fileNames = board.getImageList().stream().map(boardImage -> boardImage.getImageUrl()).toList();
+
             boardRepository.delete(board);
+
+            customFileUtil.deleteFiles(fileNames);
 
         } else {
             throw new AccessDeniedException("나의 글이 아닙니다.");
