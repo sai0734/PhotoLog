@@ -15,7 +15,7 @@ KDT 풀스택 부트캠프 수료 직후 시작한 1인 포트폴리오 프로�
 
 | 영역 | 스택 |
 |---|---|
-| Frontend | React(Vite), TypeScript(**미착수** — `tsconfig.json` 없음, `.ts/.tsx` 0개, 본인이 직접 설정 예정), Redux Toolkit, Axios, **Tailwind CSS**(`tailwindcss ^3.4.19` — 스켈레톤에서 넘어옴, 유지/Vanilla CSS 교체 미결정), `exifr`(EXIF 파싱), SunCalc(월령 계산) |
+| Frontend | React(Vite), TypeScript(**미착수** — `tsconfig.json` 없음, `.ts/.tsx` 0개, 본인이 직접 설정 예정), Redux Toolkit, Axios, **Tailwind CSS 제거 결정(2026-09-29)** — 기존 로그인 관련 페이지의 Tailwind 클래스를 걷어내고 기본 HTML로 되돌리는 작업 진행 중(작업 편의 목적), `exifr`(EXIF 파싱), SunCalc(월령 계산) |
 | Backend | JDK 21, Spring Boot 3.x, Spring Security + JWT(jjwt), Spring Data JPA(Hibernate), MariaDB |
 | AI | Python 3.10+, FastAPI, LangChain, ChromaDB(RAG), Ollama(로컬 LLM, 1순위) 또는 Groq(무료 API, 대안) |
 | 외부 API | Kakao Map API, OpenWeatherMap(무료 티어 5일 예보 한도), TossPayments(결제 데모, 스트레치) |
@@ -116,22 +116,22 @@ com.backend
 - 스트레치: 이메일 인증, 소셜 로그인, 관리자 페이지 회원관리
 - 로그인/로그아웃/정보수정 흐름 동작 확인 완료, 이후 MyBatis → Spring Data JPA로 전환하고 재검증 완료 (단, `ModifyComponent` 비번 덮어쓰기 버그 있음 — 14절)
 
-### ② 자유게시판 (MVP) — 🔧 백엔드 CRUD 6개(파일 조회 포함) 구현 및 Postman 일부 검증 완료, 댓글·프론트 남음 (2026-09-28 갱신)
+### ② 자유게시판 (MVP) — 🔧 백엔드 CRUD 6개 Postman 검증 전부 완료, 프론트 API 레이어(`boardApi.js`) 완료, 화면(.jsx)·댓글 남음 (2026-09-29 갱신)
 - **`BoardController` 엔드포인트 6개**: `GET /api/board`(목록), `GET /api/board/{boardNumber}`(단건), `POST /api/board`(등록), `PUT /api/board/{boardNumber}`(수정), `DELETE /api/board/{boardNumber}`(삭제), `GET /api/board/files/{fileName}`(이미지 파일 조회, 신규). 등록/수정/삭제는 `Principal.getName()`으로 작성자 이메일을 서버가 직접 채움(클라이언트가 못 정함), 전부 `@PreAuthorize("hasAnyRole('USER')")`. `register`/`modify`는 `@RequestBody`(JSON) 대신 **`@ModelAttribute`로 전환 완료** — 멀티파트(`title`/`contents`/`files`/`keepImageNumbers`)를 정상 수신함. Postman으로 실제 멀티파트 요청 검증 완료.
 - **파일 조회 엔드포인트 (`GET /files/{fileName}`) 설계 결정**: `@PreAuthorize` 없이 열어두고, `JWTCheckFilter.shouldNotFilter()`에도 `/api/board/files` 경로를 추가해 **토큰 검사 자체를 건너뛰게 함**. 이유: `<img src="...">` 태그는 `Authorization` 헤더를 실어 보내지 않아서(그건 `jwtAxios` 인터셉터가 axios 요청에만 붙여주는 것), 인증을 요구하면 이미지가 영원히 안 보임. `CustomFileUtil.getFile()`은 이미 있었지만 **어느 컨트롤러에도 연결이 안 돼 있었던 걸 전체 리뷰로 발견**해서 이번에 연결함.
 - **`BoardServiceImpl` 현황 (2026-09-28, 5개 메서드 전부 완료)**:
   - `insert()` — `MemberRepository.findById(email)`로 조회해 `Board.builder()`로 직접 조립, `files`가 있으면 `CustomFileUtil.saveFiles()` → `BoardImage` 생성. Postman으로 텍스트만/이미지 포함 둘 다 실제 검증 완료.
   - `getBoard()`/`getBoardList()` — `ModelMapper` 안 쓰고 수동 `builder()` 변환 (8절 7번 참고). `getBoard()` Postman 검증 완료(이미지 목록 포함 정상 반환 확인), `getBoardList()`는 아직 Postman 미검증.
-  - `modify()` — 소유권 체크 + `keepImageNumbers`에 없는 기존 이미지는 디스크+DB 삭제, `files`로 들어온 새 파일은 저장 후 추가하는 **배치교체 로직 완성**. 아직 Postman 미검증(다음 작업).
-  - `delete()` — 소유권 체크 후 `board.getImageList()`의 `imageUrl`을 모아 `customFileUtil.deleteFiles()` 호출 + `boardRepository.delete(board)`. **DB 삭제를 먼저, 파일 삭제를 나중에 하는 순서** — 파일 삭제가 실패해도 `@Transactional` 롤백으로 DB도 같이 되돌려져서 불일치가 안 생김. 아직 Postman 미검증.
+  - `modify()` — 소유권 체크 + `keepImageNumbers`에 없는 기존 이미지는 디스크+DB 삭제, `files`로 들어온 새 파일은 저장 후 추가하는 **배치교체 로직 완성, 2026-09-29 Postman 검증 완료**(이미지 삭제 실제 동작까지 확인). 검증 중 버그 발견·해결 — 8절 10번 참고.
+  - `delete()` — 소유권 체크 후 `board.getImageList()`의 `imageUrl`을 모아 `customFileUtil.deleteFiles()` 호출 + `boardRepository.delete(board)`. **DB 삭제를 먼저, 파일 삭제를 나중에 하는 순서** — 파일 삭제가 실패해도 `@Transactional` 롤백으로 DB도 같이 되돌려져서 불일치가 안 생김. **2026-09-29 Postman 검증 완료**(DB 삭제·디스크 파일 삭제 둘 다 확인).
 - **오늘(2026-09-28) 백엔드 전체 리뷰에서 새로 발견한 것**:
   1. **`getBoardList()`의 N+1 쿼리** — `findWithAllMember()`가 `memberEmail`만 즉시 로딩하고 `imageList`는 안 해서, 게시글 10개면 쿼리가 11번 나감. 컬렉션이라 `@EntityGraph`에 그냥 추가하면 페이징이 메모리에서 처리되는 함정이 있음 — `@BatchSize` 등으로 풀어야 함. **당장은 보류, 로컬 데모 규모에서는 급하지 않음** (9절에도 기록)
   2. **`BoardServiceImpl`의 `modelMapper` 필드가 완전히 미사용** — 두 곳(`getBoard`/`insert`) 모두 주석 처리돼 있어서 이 클래스 안에서는 죽은 의존성. 지우지 않고 유지 중.
+- **프론트엔드 API 레이어 (`frontend/src/api/boardApi.js`) — 2026-09-29 완료**: `getBoardList(page, size)`, `getBoard(boardNumber)`, `insert(title, contents, files)`, `modify(boardNumber, title, contents, files, keepImageNumbers)`, `deleteBoard(boardNumber)` 5개 함수 전부 작성 완료. 전부 `jwtAxios` 사용(이미지 파일 조회만 `<img src>`로 직접 URL을 박아서 별도 함수 불필요). 등록/수정은 `FormData`에 `files`/`keepImageNumbers` 같은 배열 필드를 **같은 key로 반복 `append()`**해서 백엔드의 `List<MultipartFile>`/`List<Long>` 바인딩과 맞춤. 과정에서 `host.js` 파일을 없애고 `API_SERVER_HOST`를 `memberApi.js`로 옮기는 구조 변경도 함께 함 — `jwtUtil.jsx`의 import도 `../api/host` → `../api/memberApi`로 같이 수정.
 - **남은 것**:
-  1. **Postman으로 `modify()`, `delete()`, `getBoardList()` 검증** — 아직 안 함
-  2. **댓글·대댓글(2단계 제한)** — 완전히 미착수, `Comment` 엔티티부터 새로 설계해야 함
-  3. **프론트엔드(.jsx)** — 게시판 화면 자체가 하나도 없음 (리스트/상세/등록/수정 페이지 전부 미착수)
-  4. (선택) `BoardRepositoryTest`/`BoardServiceImplTest`에 `@Transactional` 추가 — 하드코딩 ID가 테스트 반복 실행마다 어긋나는 문제, 당장 급하지 않아 보류 중
+  1. **댓글·대댓글(2단계 제한)** — 완전히 미착수, `Comment` 엔티티부터 새로 설계해야 함
+  2. **프론트엔드 화면(.jsx)** — `boardApi.js`는 완료됐으나 리스트/상세/등록/수정 페이지 자체는 아직 미착수. 착수 전 **라우터 구조 재설계 + 기존 로그인 관련 페이지의 Tailwind 클래스 제거(기본 HTML로 되돌리기)** 작업을 먼저 진행하기로 함(2026-09-29)
+  3. (선택) `BoardRepositoryTest`/`BoardServiceImplTest`에 `@Transactional` 추가 — 하드코딩 ID가 테스트 반복 실행마다 어긋나는 문제, 당장 급하지 않아 보류 중
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
 - **다중 이미지 처리 방식 (2026-09-19 최종 확정, 2026-09-18의 "별도 엔드포인트 분리" 결정을 대체함)**: 이미지 추가/삭제용 별도 엔드포인트(`POST/DELETE .../images`)를 만들지 않고, 수정 페이지에서 X로 이미지를 지웠다가 저장 버튼을 누르는 시점에 **한 번에 배치 처리**하기로 변경. `BoardDTO`에 `keepImageNumbers`(유지할 `boardImageNumber` 목록)와 `files`(새로 추가할 파일)를 함께 담아 `PUT /api/board/{boardNumber}` 한 번으로 전송 — `modify()`가 "keep 목록에 없는 기존 이미지는 삭제 + files는 추가"를 한 트랜잭션에서 처리. 이유: 즉시 삭제 API는 사용자가 "취소"를 누르면 이미 지운 이미지를 되돌릴 수 없어 UX상 맞지 않다고 판단
 - 스트레치: 카테고리 필터, 드래그앤드롭·클립보드 붙여넣기 업로드
@@ -175,6 +175,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 7. **`ModelMapper` 매칭 모호성 — 한 DTO에 타입이 비슷한 리스트 필드가 여러 개 있으면 자동매핑이 엉뚱한 조합을 골라 크래시 (2026-09-19, 게시판 이미지 기능 중 발견)**: `BoardDTO`에 `imageList`(`List<BoardImageDTO>`, 조회용)와 `keepImageNumbers`(`List<Long>`, 수정 시 유지할 이미지 식별자)가 같이 있는 상태에서 `modelMapper.map(board, BoardDTO.class)`를 호출하면, `ModelMapper`가 `Board.imageList`(`List<BoardImage>`)를 `BoardDTO`의 어느 리스트 필드에 매칭할지 애매해져서(둘 다 "리스트"라는 것만 보고 후보로 삼음) `BoardImage`→`Long` 변환을 시도하다 크래시 발생. 참고로 `Board.imageList`↔`BoardDTO.imageList`처럼 **필드명이 정확히 같고 다른 리스트 필드가 없을 때는** `ModelMapper`가 컨테이너·원소 타입을 재귀적으로 알아서 변환해줌(원소 타입이 달라도 이름이 같으면 자동 매핑됨, 이건 실제로 확인됨). **해결**: `getBoard()`/`getBoardList()`에서는 `modelMapper.map()` 호출을 걷어내고 `BoardDTO.builder()` + `imageList.stream().map(...).toList()`로 직접 수동 변환. `insert()`도 `String`(`BoardDTO.memberEmail`) → `Member`(Entity) 방향 변환이 위험해서(존재하지 않는 회원으로 새 Entity를 만들려는 시도, `TransientPropertyValueException` 위험) 처음부터 `ModelMapper` 대신 `MemberRepository.findById()` + `Board.builder()`로 직접 조립. **일반화된 규칙**: `ModelMapper`는 "필드명이 정확히 일치하고, 그 타입과 매칭될 수 있는 후보가 하나뿐일 때"만 믿을 수 있다 — 조회용/쓰기용 필드가 한 DTO에 혼재하거나 비슷한 타입의 필드가 여럴 있으면 수동 변환이 더 안전함. DTO 분리로 이 모호성 자체를 없애는 방법도 있었지만, 본인이 "DTO를 하나 더 만드는 게 더 아닌 것 같다"고 판단해 DTO는 하나로 유지하고 변환 코드를 수동으로 쓰는 쪽을 선택함.
 8. **Postman에서 Spring Security 기본 로그인(`formLogin`)이 계속 `ERROR_LOGIN`으로 실패 — 원인은 `Content-Type` (2026-09-28, 게시판 Postman 검증 중 발견)**: `UsernamePasswordAuthenticationFilter`는 `request.getParameter("username")`으로 값을 읽는데, 이건 **서블릿 컨테이너(Tomcat)가 바디를 폼으로 자동 파싱해줄 때만** 채워짐 — `Content-Type`이 `application/x-www-form-urlencoded`/`multipart/form-data`일 때만 파싱되고, `application/json`이면 바디 내용이 폼처럼 생겨도 파싱 자체가 안 일어나 `getParameter`가 `null`을 반환함. Postman의 `Body → raw` 모드에서 오른쪽 드롭다운이 `JSON`으로 돼 있으면 Postman이 자동으로 `Content-Type: application/json`을 붙여서, 바디 글자가 `username=...&password=...` 형태여도 실패함. **해결**: `Body → x-www-form-urlencoded` 라디오를 쓰면 Postman이 올바른 헤더를 자동으로 붙여줌(가장 안전). `raw`를 꼭 쓰려면 드롭다운을 `Text`로 바꾸고 `Headers`에 `Content-Type: application/x-www-form-urlencoded`를 **직접 추가**해야 함(자동 헤더와 충돌할 수 있어 실수하기 쉬움). **일반화된 규칙**: 로그인 엔드포인트는 컨트롤러가 아니라 Security 필터가 처리하고, 이 필터는 JSON을 못 읽는다 — 이 프로젝트에서 유일하게 폼 형식이 강제되는 엔드포인트.
 9. **DB에 직접 넣은 계정의 비밀번호가 평문이라 로그인 안 됨 (2026-09-28)**: 특정 계정(`hjc135@naver.com`)의 `tbl_member.pw` 컬럼에 `1111`이 **BCrypt 해시가 아니라 평문 그대로** 들어있어서, `PasswordEncoder.matches("1111", "1111")`가 항상 `BadCredentialsException`을 던짐. DB 툴로 직접 INSERT/UPDATE하면 `passwordEncoder.encode(...)`를 거치지 않아서 이런 일이 생김. **회피**: `MemberRepositoryTests.testInsertMember()`를 실행해서 제대로 암호화된 테스트 계정(`user0@aaa.com`~`user9@aaa.com`, 비번 `1111`)을 새로 만들어 검증에 사용. **일반화된 규칙**: 회원 데이터를 DB에 직접 넣을 땐 항상 `passwordEncoder.encode()`를 거친 값을 넣어야 한다 — 회원가입 기능이 아직 없는 지금 특히 주의.
+10. **`modify()`의 이미지 삭제 로직이 계산은 맞는데 실제로 삭제가 안 됨 — `cascade=ALL` 때문에 부모의 stale 참조가 삭제를 되살림 (2026-09-29, Postman 검증 중 발견)**: `keepImageNumbers`로 계산한 `imageToDelete` 리스트는 로그로 확인해도 정확했고(`[BoardImage(5), BoardImage(6)]`), `boardImageRepository.deleteAll(imageToDelete)`도 정상 호출됐는데, 그 직후 `getBoard()`로 재조회하면 삭제 대상 이미지가 **여전히 남아있었음**. 원인: `Board.imageList`가 `@OneToMany(cascade = CascadeType.ALL, ...)`인데, `boardImageRepository.deleteAll()`은 `BoardImage` 쪽에만 "삭제해라" 표시를 하고 `board` 객체가 메모리에 들고 있는 `imageList`(자바 리스트) 자체는 그대로 남겨둠. 트랜잭션이 끝나면서 Hibernate가 `board`(title도 바뀌어서 dirty 상태)를 flush할 때, `cascade=ALL` 때문에 `imageList`에 여전히 남아있는 5·6번 참조를 "아직 자식"으로 보고 삭제를 취소시켜버림(전체 트랜잭션 롤백이 아니라, 이미지 삭제만 무효화되는 것 — `title`/`contents` 변경은 정상적으로 커밋됨). **해결**: `boardImageRepository.deleteAll(imageToDelete)` 뒤에 `board.getImageList().removeAll(imageToDelete)`를 추가해서, DB 쪽 삭제와 `board`가 메모리에 들고 있는 컬렉션을 동기화. **일반화된 규칙**: 양방향 연관관계(`@OneToMany`/`@ManyToOne`)에서 자식을 자식 쪽 리포지토리로 직접 삭제할 때는, 부모가 들고 있는 컬렉션 필드에서도 같이 제거해줘야 한다 — 안 그러면 `cascade`가 부모 쪽 stale 참조를 근거로 삭제를 무효화할 수 있다. 갤러리 등 앞으로 만들 모든 양방향 관계에 동일하게 적용.
 
 ## 9. 코드 리뷰에서 발견했지만 의도적으로 그대로 둔 것들
 
@@ -233,7 +234,9 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
    - ✅ **`BoardController` 멀티파트 전환 + `modify()`/`delete()` 완성 — 2026-09-28 완료**: `register`/`modify`를 `@RequestBody` → `@ModelAttribute`로 변경. `modify()`에 `keepImageNumbers`/`files` 배치교체 로직 추가(기존 이미지 중 keep 목록에 없는 것 디스크+DB 삭제, `files`는 저장 후 추가). `delete()`에 `customFileUtil.deleteFiles()` 호출 추가(디스크 파일도 정리됨). 6절 ② 참고
    - ✅ **이미지 조회 엔드포인트 신규 추가 — 2026-09-28 완료**: 전체 백엔드 리뷰 중 `CustomFileUtil.getFile()`이 어느 컨트롤러에도 연결 안 된 걸 발견. `GET /api/board/files/{fileName}` 추가하고 `@PreAuthorize` 없이 열어둠 + `JWTCheckFilter.shouldNotFilter()`에도 예외 처리 추가(`<img>` 태그가 `Authorization` 헤더를 안 보내기 때문)
    - ✅ **Postman 검증 — 2026-09-28 일부 완료**: 로그인(`Content-Type` 이슈로 삽질 끝에 해결, 8절 8·9번 참고), 등록(텍스트만/이미지 포함 둘 다), 단건 조회(`getBoard`), 파일 조회 — **전부 확인됨**. `MemberRepositoryTests.testInsertMember()`를 실행해서 제대로 암호화된 테스트 계정(`user0~9@aaa.com`/`1111`) 확보.
-   - 🔧 **다음 작업**: Postman으로 `modify()`(이미지 배치교체 실제 동작), `delete()`, `getBoardList()` 검증 → 그다음 게시판 프론트엔드(.jsx) 착수 — 리스트/상세/등록/수정 페이지
+   - ✅ **Postman 검증 — 2026-09-29 나머지 전부 완료**: `modify()`(이미지 배치교체 실제 삭제 동작 확인, 검증 중 `cascade` 버그 발견·해결 — 8절 10번 참고), `delete()`(DB 삭제 + 디스크 파일 삭제 둘 다 확인), `getBoardList()`(페이징·정렬·전체개수 확인) — **백엔드 CRUD 6개 Postman 검증 전부 완료**.
+   - ✅ **`frontend/src/api/boardApi.js` 작성 완료 — 2026-09-29**: `getBoardList`/`getBoard`/`insert`/`modify`/`deleteBoard` 5개 함수. `host.js` 삭제 + `API_SERVER_HOST`를 `memberApi.js`로 이동(`jwtUtil.jsx` import도 같이 수정)하는 구조 변경 병행.
+   - 🔧 **다음 작업**: 게시판 화면(.jsx) 착수 전에, (1) 라우터 구조 전체 재설계 (2) 기존 로그인 관련 페이지의 Tailwind CSS 제거하고 기본 HTML로 되돌리기 — 두 개를 먼저 진행하기로 함. 그 다음 게시판 리스트/상세/등록/수정 페이지 순서로 착수.
 4. **회원 기능 마무리** — 회원가입, 아이디 중복확인, 프로필사진 업로드, 회원탈퇴(소프트 삭제) — 14절 🔴 항목
 5. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정) — **회원 기능까지 다 끝난 뒤에 진행하기로 결정**
 

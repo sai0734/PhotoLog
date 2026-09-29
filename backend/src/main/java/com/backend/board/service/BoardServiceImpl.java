@@ -159,6 +159,11 @@ public class BoardServiceImpl implements BoardService{
 
                 boardImageRepository.deleteAll(imageToDelete);
 
+                // boardImageRepository.deleteAll(imageToDelete)로 BoardImage객체들을 hibernate에게 삭제요청 했지만 정작 Board객체 즉 List<BoardImage>에는 삭제가 안됬음
+                // 때문에 해당 로직이 실행이 끝났을때 트랜잭션이 Board의 List<BoardImage>가 있는걸 확인하고 cascade = CascadeType.ALL 이기 때문에 다시 되살림
+                // 해결하기 위해 board객체 그 자체에도 List<BoardImage>를 삭제함
+                board.getImageList().removeAll(imageToDelete);
+
             }
 
             if(boardDTO.getFiles() != null && !boardDTO.getFiles().isEmpty()) {
