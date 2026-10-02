@@ -15,7 +15,7 @@ KDT 풀스택 부트캠프 수료 직후 시작한 1인 포트폴리오 프로�
 
 | 영역 | 스택 |
 |---|---|
-| Frontend | React(Vite), TypeScript(**미착수** — `tsconfig.json` 없음, `.ts/.tsx` 0개, 본인이 직접 설정 예정), Redux Toolkit, Axios, **Tailwind CSS 제거 결정(2026-09-29)** — 기존 로그인 관련 페이지의 Tailwind 클래스를 걷어내고 기본 HTML로 되돌리는 작업 진행 중(작업 편의 목적), `exifr`(EXIF 파싱), SunCalc(월령 계산) |
+| Frontend | React(Vite), TypeScript(**미착수** — `tsconfig.json` 없음, `.ts/.tsx` 0개, 본인이 직접 설정 예정), Redux Toolkit, Axios, **Tailwind CSS 제거 완료(2026-10-02)** — 설정 파일(`tailwind.config.js`/`postcss.config.js`)·`index.css`·모든 `className` 삭제, `package.json`의 `tailwindcss`/`postcss`/`autoprefixer`는 의도적으로 남김(설정이 없어 동작 안 함). 일반 CSS는 `App.css` 한 파일에 몰아서 `className`으로 연결(4절 참고), `exifr`(EXIF 파싱), SunCalc(월령 계산) |
 | Backend | JDK 21, Spring Boot 3.x, Spring Security + JWT(jjwt), Spring Data JPA(Hibernate), MariaDB |
 | AI | Python 3.10+, FastAPI, LangChain, ChromaDB(RAG), Ollama(로컬 LLM, 1순위) 또는 Groq(무료 API, 대안) |
 | 외부 API | Kakao Map API, OpenWeatherMap(무료 티어 5일 예보 한도), TossPayments(결제 데모, 스트레치) |
@@ -59,6 +59,8 @@ EXIF는 서버 왕복 없이 **프론트엔드에서 `exifr`로 즉시 파싱**�
 **파일 저장 정책**: 업로드 이미지(프로필, 게시글 첨부, 갤러리 사진)는 클라우드 스토리지 없이 Spring 프로젝트의 `upload` 폴더에 저장, DB엔 경로만 저장. `.gitignore`로 제외하되, `CustomFileUtil`의 `@PostConstruct` 초기화 로직이 앱 구동 시 폴더가 없으면 자동 생성하므로 `.gitkeep`은 불필요.
 
 **패키지 구조 원칙(백엔드)**: 기능 단위 패키지 구조(package-by-feature). 아래 5절 참고. 게시판·갤러리 등 새 기능도 동일 컨벤션(`com.backend.board`, `com.backend.gallery`)을 따를 것.
+
+**프론트엔드 구조·스타일 원칙 (2026-10-02)**: `router/root.jsx`(최상위 라우터는 하나뿐) → `router/xxxRouter.jsx`(기능별 라우트 객체 배열을 반환하는 함수, `root.jsx`에서 `children: xxxRouter()`로 연결, 자식 `path`에는 `/`를 붙이지 않음 — 붙이면 부모를 무시하고 절대 경로가 됨) → `pages/`(`BasicLayout`으로 감싸 컴포넌트를 조립) → `components/`(실제 로직·화면) 순으로 연결. **모든 페이지는 `BasicLayout`을 사용**(로그인/로그아웃 포함). 스타일은 Tailwind를 제거하고 일반 CSS를 **`App.css` 한 파일에 몰아서** `className`으로 연결(전역 CSS라 클래스 이름은 `modal-overlay`처럼 구체적으로 지음). **Tailwind 제거 이유**: 클래스가 CSS 속성을 줄인 약어(`p-4`=`padding: 1rem`)라 CSS 기본기가 없으면 읽을 수 없고, "기본기를 직접 다지기"라는 프로젝트 목표와 안 맞음. 최종 스타일링 방식은 미정(필요해지면 CSS Modules나 Tailwind 재도입 검토). 메뉴 바는 `#navbar`(flex + `justify-content: space-between` + `padding`) + `.nav-list`(flex, `list-style: none`).
 
 **개발 순서 원칙**: 5개 핵심 기능을 동시에 벌리지 않고 순서대로 하나씩. 각 기능은 화면-API-DB가 끝까지 연결되는 최소 동작 버전(뼈대)을 먼저 완성해 파이프라인이 도는 걸 확인한 뒤, 예외 처리·유효성 검증·UX 디테일을 단계적으로 채운다.
 
@@ -121,7 +123,7 @@ com.backend
 - **파일 조회 엔드포인트 (`GET /files/{fileName}`) 설계 결정**: `@PreAuthorize` 없이 열어두고, `JWTCheckFilter.shouldNotFilter()`에도 `/api/board/files` 경로를 추가해 **토큰 검사 자체를 건너뛰게 함**. 이유: `<img src="...">` 태그는 `Authorization` 헤더를 실어 보내지 않아서(그건 `jwtAxios` 인터셉터가 axios 요청에만 붙여주는 것), 인증을 요구하면 이미지가 영원히 안 보임. `CustomFileUtil.getFile()`은 이미 있었지만 **어느 컨트롤러에도 연결이 안 돼 있었던 걸 전체 리뷰로 발견**해서 이번에 연결함.
 - **`BoardServiceImpl` 현황 (2026-09-28, 5개 메서드 전부 완료)**:
   - `insert()` — `MemberRepository.findById(email)`로 조회해 `Board.builder()`로 직접 조립, `files`가 있으면 `CustomFileUtil.saveFiles()` → `BoardImage` 생성. Postman으로 텍스트만/이미지 포함 둘 다 실제 검증 완료.
-  - `getBoard()`/`getBoardList()` — `ModelMapper` 안 쓰고 수동 `builder()` 변환 (8절 7번 참고). `getBoard()` Postman 검증 완료(이미지 목록 포함 정상 반환 확인), `getBoardList()`는 아직 Postman 미검증.
+  - `getBoard()`/`getBoardList()` — `ModelMapper` 안 쓰고 수동 `builder()` 변환 (8절 7번 참고). `getBoard()` Postman 검증 완료(이미지 목록 포함 정상 반환 확인), `getBoardList()`도 2026-09-29 Postman 검증 완료(페이징·`boardNumber` 내림차순 정렬·전체 개수 확인).
   - `modify()` — 소유권 체크 + `keepImageNumbers`에 없는 기존 이미지는 디스크+DB 삭제, `files`로 들어온 새 파일은 저장 후 추가하는 **배치교체 로직 완성, 2026-09-29 Postman 검증 완료**(이미지 삭제 실제 동작까지 확인). 검증 중 버그 발견·해결 — 8절 10번 참고.
   - `delete()` — 소유권 체크 후 `board.getImageList()`의 `imageUrl`을 모아 `customFileUtil.deleteFiles()` 호출 + `boardRepository.delete(board)`. **DB 삭제를 먼저, 파일 삭제를 나중에 하는 순서** — 파일 삭제가 실패해도 `@Transactional` 롤백으로 DB도 같이 되돌려져서 불일치가 안 생김. **2026-09-29 Postman 검증 완료**(DB 삭제·디스크 파일 삭제 둘 다 확인).
 - **오늘(2026-09-28) 백엔드 전체 리뷰에서 새로 발견한 것**:
@@ -130,7 +132,7 @@ com.backend
 - **프론트엔드 API 레이어 (`frontend/src/api/boardApi.js`) — 2026-09-29 완료**: `getBoardList(page, size)`, `getBoard(boardNumber)`, `insert(title, contents, files)`, `modify(boardNumber, title, contents, files, keepImageNumbers)`, `deleteBoard(boardNumber)` 5개 함수 전부 작성 완료. 전부 `jwtAxios` 사용(이미지 파일 조회만 `<img src>`로 직접 URL을 박아서 별도 함수 불필요). 등록/수정은 `FormData`에 `files`/`keepImageNumbers` 같은 배열 필드를 **같은 key로 반복 `append()`**해서 백엔드의 `List<MultipartFile>`/`List<Long>` 바인딩과 맞춤. 과정에서 `host.js` 파일을 없애고 `API_SERVER_HOST`를 `memberApi.js`로 옮기는 구조 변경도 함께 함 — `jwtUtil.jsx`의 import도 `../api/host` → `../api/memberApi`로 같이 수정.
 - **남은 것**:
   1. **댓글·대댓글(2단계 제한)** — 완전히 미착수, `Comment` 엔티티부터 새로 설계해야 함
-  2. **프론트엔드 화면(.jsx)** — `boardApi.js`는 완료됐으나 리스트/상세/등록/수정 페이지 자체는 아직 미착수. 착수 전 **라우터 구조 재설계 + 기존 로그인 관련 페이지의 Tailwind 클래스 제거(기본 HTML로 되돌리기)** 작업을 먼저 진행하기로 함(2026-09-29)
+  2. **프론트엔드 화면(.jsx)** — `boardApi.js`는 완료됐으나 리스트/상세/등록/수정 페이지 자체는 아직 미착수. 착수 전 선행 작업(라우터 구조 파악·`join` 경로 추가, Tailwind 제거, `BasicLayout` 통일, 스켈레톤 잔재 정리)은 2026-10-02 완료. 남은 건 **`boardRouter.jsx`**(리스트/상세/등록/수정 경로 설계 — `useCustomMove`는 `../list`, `../read/:번호`, `../modify/:번호` 상대 경로를 가정함) + 게시판 페이지/컴포넌트. 리스트 페이징 UI는 `PageComponent`가 옛 `PageResponseDTO` 모양(`prev`/`next`/`pageNumList`) 기준이라 Spring `Page` 모양(`number`/`totalPages`/`first`/`last`)에 맞춰 새로 설계해야 함
   3. (선택) `BoardRepositoryTest`/`BoardServiceImplTest`에 `@Transactional` 추가 — 하드코딩 ID가 테스트 반복 실행마다 어긋나는 문제, 당장 급하지 않아 보류 중
 - 페이지: 리스트(페이징) / 상세 / 등록(다중 이미지 업로드) / 수정(삭제 기능 포함)
 - **다중 이미지 처리 방식 (2026-09-19 최종 확정, 2026-09-18의 "별도 엔드포인트 분리" 결정을 대체함)**: 이미지 추가/삭제용 별도 엔드포인트(`POST/DELETE .../images`)를 만들지 않고, 수정 페이지에서 X로 이미지를 지웠다가 저장 버튼을 누르는 시점에 **한 번에 배치 처리**하기로 변경. `BoardDTO`에 `keepImageNumbers`(유지할 `boardImageNumber` 목록)와 `files`(새로 추가할 파일)를 함께 담아 `PUT /api/board/{boardNumber}` 한 번으로 전송 — `modify()`가 "keep 목록에 없는 기존 이미지는 삭제 + files는 추가"를 한 트랜잭션에서 처리. 이유: 즉시 삭제 API는 사용자가 "취소"를 누르면 이미 지운 이미지를 되돌릴 수 없어 UX상 맞지 않다고 판단
@@ -176,6 +178,7 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 8. **Postman에서 Spring Security 기본 로그인(`formLogin`)이 계속 `ERROR_LOGIN`으로 실패 — 원인은 `Content-Type` (2026-09-28, 게시판 Postman 검증 중 발견)**: `UsernamePasswordAuthenticationFilter`는 `request.getParameter("username")`으로 값을 읽는데, 이건 **서블릿 컨테이너(Tomcat)가 바디를 폼으로 자동 파싱해줄 때만** 채워짐 — `Content-Type`이 `application/x-www-form-urlencoded`/`multipart/form-data`일 때만 파싱되고, `application/json`이면 바디 내용이 폼처럼 생겨도 파싱 자체가 안 일어나 `getParameter`가 `null`을 반환함. Postman의 `Body → raw` 모드에서 오른쪽 드롭다운이 `JSON`으로 돼 있으면 Postman이 자동으로 `Content-Type: application/json`을 붙여서, 바디 글자가 `username=...&password=...` 형태여도 실패함. **해결**: `Body → x-www-form-urlencoded` 라디오를 쓰면 Postman이 올바른 헤더를 자동으로 붙여줌(가장 안전). `raw`를 꼭 쓰려면 드롭다운을 `Text`로 바꾸고 `Headers`에 `Content-Type: application/x-www-form-urlencoded`를 **직접 추가**해야 함(자동 헤더와 충돌할 수 있어 실수하기 쉬움). **일반화된 규칙**: 로그인 엔드포인트는 컨트롤러가 아니라 Security 필터가 처리하고, 이 필터는 JSON을 못 읽는다 — 이 프로젝트에서 유일하게 폼 형식이 강제되는 엔드포인트.
 9. **DB에 직접 넣은 계정의 비밀번호가 평문이라 로그인 안 됨 (2026-09-28)**: 특정 계정(`hjc135@naver.com`)의 `tbl_member.pw` 컬럼에 `1111`이 **BCrypt 해시가 아니라 평문 그대로** 들어있어서, `PasswordEncoder.matches("1111", "1111")`가 항상 `BadCredentialsException`을 던짐. DB 툴로 직접 INSERT/UPDATE하면 `passwordEncoder.encode(...)`를 거치지 않아서 이런 일이 생김. **회피**: `MemberRepositoryTests.testInsertMember()`를 실행해서 제대로 암호화된 테스트 계정(`user0@aaa.com`~`user9@aaa.com`, 비번 `1111`)을 새로 만들어 검증에 사용. **일반화된 규칙**: 회원 데이터를 DB에 직접 넣을 땐 항상 `passwordEncoder.encode()`를 거친 값을 넣어야 한다 — 회원가입 기능이 아직 없는 지금 특히 주의.
 10. **`modify()`의 이미지 삭제 로직이 계산은 맞는데 실제로 삭제가 안 됨 — `cascade=ALL` 때문에 부모의 stale 참조가 삭제를 되살림 (2026-09-29, Postman 검증 중 발견)**: `keepImageNumbers`로 계산한 `imageToDelete` 리스트는 로그로 확인해도 정확했고(`[BoardImage(5), BoardImage(6)]`), `boardImageRepository.deleteAll(imageToDelete)`도 정상 호출됐는데, 그 직후 `getBoard()`로 재조회하면 삭제 대상 이미지가 **여전히 남아있었음**. 원인: `Board.imageList`가 `@OneToMany(cascade = CascadeType.ALL, ...)`인데, `boardImageRepository.deleteAll()`은 `BoardImage` 쪽에만 "삭제해라" 표시를 하고 `board` 객체가 메모리에 들고 있는 `imageList`(자바 리스트) 자체는 그대로 남겨둠. 트랜잭션이 끝나면서 Hibernate가 `board`(title도 바뀌어서 dirty 상태)를 flush할 때, `cascade=ALL` 때문에 `imageList`에 여전히 남아있는 5·6번 참조를 "아직 자식"으로 보고 삭제를 취소시켜버림(전체 트랜잭션 롤백이 아니라, 이미지 삭제만 무효화되는 것 — `title`/`contents` 변경은 정상적으로 커밋됨). **해결**: `boardImageRepository.deleteAll(imageToDelete)` 뒤에 `board.getImageList().removeAll(imageToDelete)`를 추가해서, DB 쪽 삭제와 `board`가 메모리에 들고 있는 컬렉션을 동기화. **일반화된 규칙**: 양방향 연관관계(`@OneToMany`/`@ManyToOne`)에서 자식을 자식 쪽 리포지토리로 직접 삭제할 때는, 부모가 들고 있는 컬렉션 필드에서도 같이 제거해줘야 한다 — 안 그러면 `cascade`가 부모 쪽 stale 참조를 근거로 삭제를 무효화할 수 있다. 갤러리 등 앞으로 만들 모든 양방향 관계에 동일하게 적용.
+11. **`LoginComponent.handleChange`가 `useState` 값을 직접 수정 + 고치다가 새 버그를 한 번 만듦 (2026-10-02, ESLint로 발견)**: `loginParam[e.target.name] = e.target.value; setLoginParam({ ...loginParam });`처럼 setter 호출 전에 상태 객체를 직접 바꿔서 ESLint `react-hooks/immutability`가 지적함(`ModifyComponent`는 14절대로 이미 고쳤는데 로그인 쪽에 같은 패턴이 남아 있었음). `setLoginParam({ ...loginParam, [e.target.name]: e.target.value })`로 수정. 수정 중 `...loginParam` 대신 `...initState`를 펼쳐서 입력할 때마다 다른 칸이 빈 값으로 초기화되는 버그를 만들었다가 바로 잡음 — **복사의 기준은 항상 '현재 상태'**. **일반화된 규칙**: 상태는 직접 건드리지 않고 새 객체를 만들어 setter로만 바꾼다. `<input name="...">` 값은 상태 객체의 키와 정확히 일치해야 한다. `npx eslint src`로 이런 패턴을 점검할 수 있다.
 
 ## 9. 코드 리뷰에서 발견했지만 의도적으로 그대로 둔 것들
 
@@ -186,6 +189,9 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 - `CustomFileUtil.getFile()`의 `winter.jpg` 폴백 참조 — 실제로 존재하지 않는 파일이라 죽은 코드로 추정. 우선순위 낮아서 그대로 둠.
 - `BoardServiceImpl.getBoardList()`의 N+1 쿼리 (2026-09-28 전체 리뷰에서 발견) — `findWithAllMember()`가 `memberEmail`만 즉시 로딩하고 `imageList`는 안 해서, 게시글 목록 조회 시 게시글당 이미지 조회 쿼리가 추가로 나감(10개면 총 11번). 예외는 안 나고 성능 이슈만 있음. `@BatchSize` 등으로 해결 가능하지만, 컬렉션이라 `@EntityGraph`로 그냥 추가하면 페이징이 메모리에서 처리되는 함정이 있어 별도 검토 필요 — 로컬 데모 규모에서는 급하지 않다고 판단해 보류.
 - `BoardServiceImpl`의 `modelMapper` 필드 미사용 (2026-09-28 전체 리뷰에서 발견) — `getBoard()`/`insert()` 양쪽에서 `modelMapper.map(...)` 호출이 전부 주석 처리돼 있어 이 클래스 안에서는 실제로 안 씀. `RootConfig`의 `ModelMapper` 빈 자체는 다른 기능(갤러리 등)에서 쓸 계획이라 유지하지만, `BoardServiceImpl`의 필드 주입은 죽은 의존성 — 우선순위 낮아서 그대로 둠.
+- **프론트 ESLint 11개 (2026-10-02 점검, 동작과 무관해서 그대로 둠)**: `loginSlice.js`의 안 쓰는 `(state, action)` 6개(`pending`/`rejected`는 나중에 로딩·에러 처리를 넣을 자리), `memberRouter.jsx`/`root.jsx`의 `react-refresh/only-export-components` 5개(라우터 파일에서 `lazy`를 선언하는 구조라 나오는 소음).
+- **`Loading` 상수 중복** — `root.jsx`와 `memberRouter.jsx`에 같은 `const Loading = <div>Loading....</div>`가 따로 있음. 게시판 라우터를 만들 때 한 곳에 모아 `export`할지 정함.
+- **지금 안 쓰이지만 게시판에서 쓸 예정이라 남긴 것들**: `FetchingModal`, `PageComponent`(스켈레톤의 Todo/Products 목록용이던 공용 컴포넌트가 모듈 삭제 후 남은 것, 옛 `PageResponseDTO` 모양 기준이라 게시판엔 새로 고쳐야 함), `useCustomMove`, `boardApi.js`. `useCustomLogin`의 `isLogin`/`moveToLoginReturn`/`exceptionHandle`/`loginState`도 `AboutPage` 삭제 후 사용처가 없지만 게시판 로그인 가드·에러 처리용으로 유지.
 
 ## 10. Git / GitHub
 
@@ -211,10 +217,11 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
 - KDT 스켈레톤 코드에 있던 Kakao 소셜로그인, 장바구니(cart), 상품(products), Todo 예제 모듈 전부 삭제
 - 폴더/파일명 리네임: `photoLog_front`→`frontend`, `photoLog_back_Mybatis`→`backend`
 - `SocialController.java`→`MemberController.java`로 리네임, Kakao 로직 제거하고 회원정보 수정 엔드포인트만 유지
-- `API_SERVER_HOST` 상수를 `todoApi.js`에서 분리해 `api/host.js`로 이동 (`memberApi.js`, `util/jwtUtil.jsx`가 참조)
+- `API_SERVER_HOST` 상수를 `todoApi.js`에서 분리해 `api/host.js`로 이동 (`memberApi.js`, `util/jwtUtil.jsx`가 참조) — **2026-09-29에 `host.js`를 삭제**하고 `memberApi.js`에서 `export const API_SERVER_HOST`로 두는 구조로 변경(`jwtUtil.jsx`/`boardApi.js`가 거기서 import)
 - `router/root.jsx`: todo/products 라우트 제거, member 라우트만 유지
 - `components/menus/BasicMenu.jsx`: Todo/Products 메뉴 링크 제거
 - (구) `schema.sql`: `tbl_member`, `tbl_member_role`만 유지 (cart/product/todo 테이블 제거) — 이후 JPA 전환으로 `schema.sql` 자체를 삭제하고 `ddl-auto`로 대체 (2절 참고)
+- **(2026-10-02 프론트 정리)** Tailwind 설정·클래스 전부 제거, `join` 경로/`JoinPage` 껍데기 추가, `AboutPage`(스켈레톤 빈 페이지) 삭제(`root.jsx` 라우트·`BasicMenu` 링크 포함), 소셜 로그인 잔재(`loginSlice`의 `login` 리듀서)·안 쓰는 `import`·`import React`·`icons.svg`·`index.css` 삭제, `LoginPage`/`LogoutPage`를 `BasicLayout`으로 통일, `memberRouter`의 lazy 변수 이름을 파일 이름과 통일(`LoginPage`/`LogoutPage`/`JoinPage`/`ModifyPage`)
 
 ## 13. 다음 할 일
 
@@ -236,7 +243,8 @@ FastAPI + LangChain + ChromaDB(RAG) 위에서 Ollama(로컬) 또는 Groq(무료 
    - ✅ **Postman 검증 — 2026-09-28 일부 완료**: 로그인(`Content-Type` 이슈로 삽질 끝에 해결, 8절 8·9번 참고), 등록(텍스트만/이미지 포함 둘 다), 단건 조회(`getBoard`), 파일 조회 — **전부 확인됨**. `MemberRepositoryTests.testInsertMember()`를 실행해서 제대로 암호화된 테스트 계정(`user0~9@aaa.com`/`1111`) 확보.
    - ✅ **Postman 검증 — 2026-09-29 나머지 전부 완료**: `modify()`(이미지 배치교체 실제 삭제 동작 확인, 검증 중 `cascade` 버그 발견·해결 — 8절 10번 참고), `delete()`(DB 삭제 + 디스크 파일 삭제 둘 다 확인), `getBoardList()`(페이징·정렬·전체개수 확인) — **백엔드 CRUD 6개 Postman 검증 전부 완료**.
    - ✅ **`frontend/src/api/boardApi.js` 작성 완료 — 2026-09-29**: `getBoardList`/`getBoard`/`insert`/`modify`/`deleteBoard` 5개 함수. `host.js` 삭제 + `API_SERVER_HOST`를 `memberApi.js`로 이동(`jwtUtil.jsx` import도 같이 수정)하는 구조 변경 병행.
-   - 🔧 **다음 작업**: 게시판 화면(.jsx) 착수 전에, (1) 라우터 구조 전체 재설계 (2) 기존 로그인 관련 페이지의 Tailwind CSS 제거하고 기본 HTML로 되돌리기 — 두 개를 먼저 진행하기로 함. 그 다음 게시판 리스트/상세/등록/수정 페이지 순서로 착수.
+   - ✅ **게시판 착수 전 프론트 정리 — 2026-10-02 완료**: 라우터 구조 파악, `join` 경로 추가, Tailwind 제거(일반 CSS는 `App.css`로), `AboutPage` 삭제, 스켈레톤 잔재 정리, `BasicLayout` 통일, `LoginComponent` 상태 직접 수정 버그 수정(8절 11번). `npx vite build` 통과, `npx eslint src`는 11개 남음(동작과 무관, 9절 참고).
+   - 🔧 **다음 작업**: `boardRouter.jsx` 설계 → 게시판 리스트/상세/등록/수정 순서로 착수(빈 페이지 + 라우터 뼈대를 먼저 만들어 화면 전환부터 확인하는 방식 추천). 그 뒤 댓글, 회원가입.
 4. **회원 기능 마무리** — 회원가입, 아이디 중복확인, 프로필사진 업로드, 회원탈퇴(소프트 삭제) — 14절 🔴 항목
 5. 프론트엔드 TypeScript 마이그레이션 (본인이 직접 설정 예정) — **회원 기능까지 다 끝난 뒤에 진행하기로 결정**
 

@@ -1,7 +1,4 @@
 import { useState } from "react";
-import { useDispatch } from "react-redux";
-import { login, loginPostAsync } from "../../slices/loginSlice";
-import { useNavigate } from "react-router-dom";
 import useCustomLogin from "../../hooks/useCustomLogin";
 
 const initState = {
@@ -15,12 +12,10 @@ const LoginComponent = () => {
   const { doLogin, moveToPath } = useCustomLogin();
 
   const handleChange = (e) => {
-    loginParam[e.target.name] = e.target.value;
-
-    setLoginParam({ ...loginParam });
+    setLoginParam({ ...loginParam, [e.target.name]: e.target.value });
   };
 
-  const handleClickLogin = (e) => {
+  const handleClickLogin = () => {
     // dispatch(login(loginParam));
     // 비동기 호출
     doLogin(loginParam) // loginSlice의 비동기 호출
@@ -36,17 +31,14 @@ const LoginComponent = () => {
   };
 
   return (
-    <div className="border-2 border-sky-200 mt-10 m-2 p-4">
-      <div className="flex justify-center">
-        <div className="text-4xl m-4 p-4 font-extrabold text-blue-500">
-          Login Component
-        </div>
+    <div>
+      <div>
+        <div>Login Component</div>
       </div>
-      <div className="flex justify-center">
-        <div className="relative mb-4 flex w-full flex-wrap items-stretch">
-          <div className="w-full p-3 text-left font-bold">Email</div>
+      <div>
+        <div>
+          <div>Email</div>
           <input
-            className="w-full p-3 rounded-r border border-solid border-neutral-500 shadow-md"
             name="email"
             type={"text"}
             value={loginParam.email}
@@ -54,11 +46,10 @@ const LoginComponent = () => {
           ></input>
         </div>
       </div>
-      <div className="flex justify-center">
-        <div className="relative mb-4 flex w-full flex-wrap items-stretch">
-          <div className="w-full p-3 text-left font-bold">Password</div>
+      <div>
+        <div>
+          <div>Password</div>
           <input
-            className="w-full p-3 rounded-r border border-solid border-neutral-500 shadow-md"
             name="pw"
             type={"password"}
             value={loginParam.pw}
@@ -66,15 +57,10 @@ const LoginComponent = () => {
           ></input>
         </div>
       </div>
-      <div className="flex justify-center">
-        <div className="relative mb-4 flex w-full justify-center">
-          <div className="w-2/5 p-6 flex justify-center font-bold">
-            <button
-              className="rounded p-4 w-36 bg-blue-500 text-xl  text-white"
-              onClick={handleClickLogin}
-            >
-              LOGIN
-            </button>
+      <div>
+        <div>
+          <div>
+            <button onClick={handleClickLogin}>LOGIN</button>
           </div>
         </div>
       </div>

@@ -24,14 +24,6 @@ const loginSlice = createSlice({
   name: "LoginSlice",
   initialState: loadMemberCookie() || initState, // 쿠키가 없다면 초깃값 사용
   reducers: {
-    login: (state, action) => {
-      console.log("login....");
-      // 소셜 로그인 회원이 사용
-      const payload = action.payload;
-      setCookie("member", JSON.stringify(payload), 1); // 1일
-
-      return payload;
-    },
     logout: (state, action) => {
       console.log("logout....");
       removeCookie("member");
@@ -60,5 +52,5 @@ const loginSlice = createSlice({
       });
   },
 });
-export const { login, logout } = loginSlice.actions;
+export const { logout } = loginSlice.actions;
 export default loginSlice.reducer;

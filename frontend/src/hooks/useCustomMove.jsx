@@ -26,7 +26,7 @@ const useCustomMove = () => {
   const queryDefault = createSearchParams({ page, size }).toString();
 
   const moveToList = (pageParam) => {
-    let queryStr = "";
+    let queryStr;
 
     if (pageParam) {
       const pageNum = getNum(pageParam.page, 1);

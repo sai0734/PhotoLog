@@ -4,9 +4,9 @@ import BasicLayout from "../../layouts/BasicLayout";
 const ModifyPage = () => {
   return (
     <BasicLayout>
-      <div className=" text-3xl">Member Modify Page</div>
+      <div>Member Modify Page</div>
 
-      <div className="bg-white w-full mt-4 p-2">
+      <div>
         <ModifyComponent></ModifyComponent>
       </div>
     </BasicLayout>
