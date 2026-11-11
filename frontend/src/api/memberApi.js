@@ -1,7 +1,7 @@
 import axios from "axios";
 import jwtAxios from "../util/jwtUtil";
 
-export const API_SERVER_HOST = "http://localhost:8080";
+export const API_SERVER_HOST = "";
 
 const host = `${API_SERVER_HOST}/api/member`;
 
