@@ -23,8 +23,10 @@ services:
       SPRING_DATASOURCE_USERNAME: photologdbuser
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
       COM_BACKEND_UPLOAD_PATH: /app/upload
+      LOGGING_FILE_NAME: /app/logs/photolog.log
     volumes:
       - uploads:/app/upload
+      - /home/ubuntu/photolog-logs:/app/logs
     depends_on:
       mariadb:
         condition: service_healthy
