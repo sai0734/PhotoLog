@@ -1,0 +1,12 @@
+stages:
+  - deploy
+
+deploy:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - echo "DB_PASSWORD=$DB_PASSWORD" > .env
+    - echo "DB_ROOT_PASSWORD=$DB_ROOT_PASSWORD" >> .env
+    - docker compose -p photolog up -d --build
+    - docker image prune -f

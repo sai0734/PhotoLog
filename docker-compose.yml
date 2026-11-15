@@ -1,0 +1,42 @@
+services:
+  mariadb:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: photologdb
+      MARIADB_USER: photologdbuser
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/photologdb
+      SPRING_DATASOURCE_USERNAME: photologdbuser
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      COM_BACKEND_UPLOAD_PATH: /app/upload
+    volumes:
+      - uploads:/app/upload
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:
+  uploads:
